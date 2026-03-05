@@ -1,0 +1,15 @@
+# R / Shiny
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+rsconnect/
+
+# DuckDB temp files
+*.duckdb.wal
+
+# macOS
+.DS_Store
+
+# Build script (not needed to run the app)
+build_ref_tables.R
