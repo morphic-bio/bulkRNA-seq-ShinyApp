@@ -68,24 +68,29 @@ deg_annotationsUI <- function(id) {
     )),
     full_screen = TRUE,
 
-    # ── Shared assay picker ─────────────────────────────────────────────────
+    # ── Shared assay filter + picker ───────────────────────────────────────
     div(
       class = "border-bottom pb-3 mb-0 px-2 pt-2",
       tags$p(class = "fw-semibold small mb-1", "Filter assay list:"),
       layout_columns(
-        col_widths = c(3, 3, 3, 3),
+        col_widths = c(4, 4, 4),
         selectInput(ns("deg_filter_gene"),  "KO Gene",
                     choices = NULL, multiple = TRUE, width = "100%"),
         selectInput(ns("deg_filter_model"), "Model System",
                     choices = NULL, multiple = TRUE, width = "100%"),
         selectInput(ns("deg_filter_kos"),   "KO Strategy",
-                    choices = NULL, multiple = TRUE, width = "100%"),
-        selectizeInput(ns("deg_assay"), "Selected Assay:",
-                       choices = NULL, selected = NULL, multiple = FALSE,
-                       options = list(placeholder = "Choose an assay\u2026"),
-                       width = "100%")
-      )
+                    choices = NULL, multiple = TRUE, width = "100%")
+      ),
+      tags$hr(class = "my-2", style = "border-top: 2px dashed #dee2e6;"),
+      tags$p(class = "fw-semibold small mb-1", "Select assay:"),
+      selectizeInput(ns("deg_assay"), NULL,
+                     choices = NULL, selected = NULL, multiple = FALSE,
+                     options = list(placeholder = "Choose an assay\u2026"),
+                     width = "100%")
     ),
+
+    # ── Gene banner (KO Gene, Model System, KO Strategy, etc.) ────────────
+    uiOutput(ns("gene_banner")),
 
     # ── 5 main tabs ─────────────────────────────────────────────────────────
     navset_tab(
@@ -96,7 +101,7 @@ deg_annotationsUI <- function(id) {
                 .info_tip("Overlap between assay DEGs and Reactome pathway gene sets.")),
         div(
           class = "py-3 px-1",
-          uiOutput(ns("gs_ro")),
+          uiOutput(ns("gs_ro")),   # annotation chips
           layout_columns(
             col_widths = c(3, 9),
             .deg_ctrl(ns, "ro"),
@@ -364,16 +369,19 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       gene[1]
     })
 
-    # Assay metadata (model system, KO strategy) for the gene banner
+    # Assay metadata (model system, KO strategy, conditions, diff time point)
     assay_meta_r <- reactive({
       assay <- assay_r(); req(assay, nzchar(assay))
       si    <- study_info_r()
       row   <- si[si$Assay == assay, ][1, ]
+      .safe <- function(col) {
+        if (col %in% names(row) && !is.na(row[[col]])) as.character(row[[col]]) else NULL
+      }
       list(
-        model_system = if ("Model_system" %in% names(row) && !is.na(row$Model_system))
-          as.character(row$Model_system) else NULL,
-        ko_strat = if ("KO_strat" %in% names(row) && !is.na(row$KO_strat))
-          as.character(row$KO_strat) else NULL
+        model_system = .safe("Model_system"),
+        ko_strat     = .safe("KO_strat"),
+        conditions   = .safe("Condition_levels"),
+        diff_tp      = .safe("Differentation_time_point")
       )
     })
 
@@ -680,11 +688,41 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
 
     gs_di_r <- .pheno_gene_annots(reactive(input$di_ds))
 
-    .render_gs <- function(annots_r, annot_label, badge_bg = "#495057") {
+    # ── Gene banner (shared, outside tabs) ─────────────────────────────────
+
+    output$gene_banner <- renderUI({
+      gene <- assay_gene_r()
+      if (is.null(gene)) return(NULL)
+      meta <- assay_meta_r()
+      .badge <- function(lbl, val, bg) {
+        if (is.null(val)) return(NULL)
+        tagList(
+          tags$span(class = "text-muted small fw-semibold me-1",
+                    style = "white-space:nowrap;", lbl),
+          tags$span(class = "badge me-2",
+                    style = sprintf("background:%s; font-size:0.72rem; color:white;", bg),
+                    val)
+        )
+      }
+      div(
+        class = "d-flex align-items-center flex-wrap gap-1 px-3 py-2 mx-2 mb-0 mt-2",
+        style = "background:#f8f9fa; border-left:4px solid #343a40; border-radius:0 6px 6px 0;",
+        tags$span(class = "fw-bold me-1", style = "font-size:0.85rem; white-space:nowrap;",
+                  "KO Gene:"),
+        tags$span(class = "badge bg-dark me-2", style = "font-size:0.85rem;", gene),
+        .badge("Model:",       meta$model_system, "#0d6efd"),
+        .badge("Perturbation:", meta$ko_strat,    "#0dcaf0"),
+        .badge("Conditions:",  meta$conditions,   "#6c757d"),
+        .badge("Diff. Time Point:", meta$diff_tp, "#6f42c1")
+      )
+    })
+
+    # ── Per-tab annotation chip strip ───────────────────────────────────────
+
+    .render_gs <- function(annots_r, annot_label_suffix, badge_bg = "#495057") {
       renderUI({
         gene <- assay_gene_r()
         if (is.null(gene)) return(NULL)
-        meta  <- assay_meta_r()
         items <- annots_r()
         chips <- if (length(items) > 0) {
           lapply(items, function(nm) {
@@ -698,26 +736,12 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
         } else {
           list(tags$span(class = "text-muted small fst-italic", "No annotations found"))
         }
-        meta_badges <- tagList(
-          if (!is.null(meta$model_system))
-            tags$span(class = "badge me-1",
-                      style = "background:#0d6efd; font-size:0.72rem; color:white;",
-                      meta$model_system),
-          if (!is.null(meta$ko_strat))
-            tags$span(class = "badge me-1",
-                      style = "background:#0dcaf0; font-size:0.72rem; color:white;",
-                      meta$ko_strat)
-        )
+        lbl <- paste0("Gene ", gene, " Associated ", annot_label_suffix)
         div(
           class = "d-flex align-items-center flex-wrap gap-1 px-3 py-2 mb-3",
-          style = "background:#f8f9fa; border-left:4px solid #343a40; border-radius:0 6px 6px 0;",
-          tags$span(class = "fw-bold me-1", style = "font-size:0.8rem; white-space:nowrap;",
-                    "KO Gene:"),
-          tags$span(class = "badge bg-dark me-1", style = "font-size:0.8rem;", gene),
-          meta_badges,
-          tags$span(class = "text-muted mx-1", "|"),
+          style = "background:#f0f4f8; border-left:3px solid #adb5bd; border-radius:0 4px 4px 0;",
           tags$span(class = "text-secondary fw-semibold me-2",
-                    style = "font-size:0.75rem; white-space:nowrap;", annot_label),
+                    style = "font-size:0.75rem; white-space:nowrap;", lbl),
           tagList(chips)
         )
       })
@@ -1031,7 +1055,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     # =========================================================================
 
     invisible(lapply(
-      c("gs_ro", "gs_go", "gs_pc", "gs_ph", "gs_di",
+      c("gene_banner",
+        "gs_ro", "gs_go", "gs_pc", "gs_ph", "gs_di",
         "ro_bar", "ro_tbl", "ro_gene_panel",
         "gobp_bar", "gobp_tbl", "gobp_gene_panel",
         "gomf_bar", "gomf_tbl", "gomf_gene_panel",

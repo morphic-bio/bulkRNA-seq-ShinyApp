@@ -25,7 +25,7 @@ study_info_data <- local({
 ui <- page_navbar(
   id       = "main_nav",
   title    = "MorPhiC Bulk RNA-seq",
-  theme    = bs_theme(bootswatch = "flatly", base_font = font_google("Inter")),
+  theme    = bs_theme(bootswatch = "litera", base_font = font_google("Inter")),
   fillable = FALSE,
 
   # Home

@@ -3,9 +3,7 @@
 # Page 1 — Perturbed Genes Overview
 #
 # Sections:
-#   1. Assay Overview (combined card):
-#        Left  — Assay Overview Table (DT with RowGroup by Gene)
-#        Right — navset_tab: "Study Breakdown" | "N Assays per Gene"
+#   1. Top card with tabs: Studies Overview | Study Breakdown | N Assays/Gene
 #   2. Perturbation Coverage & Annotation — one card, tabs:
 #        Reactome | GO BP | GO MF | PANTHER Class
 #        Phenotype Associations (IMPC, HPO)
@@ -28,39 +26,76 @@ studies_overviewUI <- function(id) {
 
   tagList(
 
-    # ── 1. Assay Overview (combined card) ───────────────────────────────────
+    # ── 1. Studies Overview / Study Breakdown / N Assays per Gene (tabs) ───
     card(
-      card_header(tagList(bsicons::bs_icon("table"), " Assay Overview",
-                          .info_tip("Browse all MorPhiC assays grouped by KO gene. Filter columns to narrow results."))),
-      layout_columns(
-        col_widths = c(7, 5),
+      card_header(
+        tagList(bsicons::bs_icon("table"), " Studies Overview")
+      ),
+      navset_tab(
 
-        # Left: Assay Overview Table
-        DTOutput(ns("assay_tbl")),
+        # ── Tab: Studies Overview table ──────────────────────────────────
+        nav_panel(
+          tagList("Studies Overview",
+                  .info_tip("Browse all MorPhiC assays grouped by KO gene. Use the gene filter to narrow results.")),
+          div(
+            class = "px-3 pt-3 pb-2",
 
-        # Right: Study Breakdown + N Assays per Gene tabs
-        navset_tab(
-          nav_panel(
-            tagList("Study Breakdown",
-                    .info_tip("Grouped bar chart showing N assays and N unique KO genes by selected attribute.")),
+            # ── Filter bar ──────────────────────────────────────────────
             div(
-              class = "d-flex align-items-center gap-2 pt-2 pb-1 px-2",
+              class = "d-flex align-items-end gap-3 mb-3 pb-3",
+              style = "border-bottom: 1px solid #e9ecef;",
+
+              # Gene filter
+              div(
+                style = "flex: 0 0 380px;",
+                tags$label(
+                  class = "form-label small fw-semibold text-secondary mb-1",
+                  style = "letter-spacing: 0.02em;",
+                  bsicons::bs_icon("funnel"), " Filter by KO Gene"
+                ),
+                selectizeInput(ns("tbl_gene_filter"), NULL,
+                               choices = NULL, multiple = TRUE, width = "100%",
+                               options = list(
+                                 placeholder = "Type to search genes\u2026",
+                                 plugins     = list("remove_button")
+                               ))
+              ),
+
+              # Summary counts
+              uiOutput(ns("tbl_summary"), inline = TRUE)
+            ),
+
+            # ── Table ───────────────────────────────────────────────────
+            DTOutput(ns("assay_tbl"))
+          )
+        ),
+
+        # ── Tab: Study Breakdown ─────────────────────────────────────────
+        nav_panel(
+          tagList("Study Breakdown",
+                  .info_tip("Grouped bar chart showing N assays and N unique KO genes by selected attribute.")),
+          div(
+            class = "p-3",
+            div(
+              class = "d-flex align-items-center gap-2 pb-2",
               tags$label("Group by:", class = "mb-0 small fw-semibold"),
               selectInput(ns("group_by"), NULL,
                           choices  = c("Model System" = "Model_system",
                                        "KO Strategy"  = "KO_strat",
                                        "Cell Line"    = "Cell_Line",
                                        "DPC"          = "DPC"),
-                          selected = "Model_system", width = "150px")
+                          selected = "Model_system", width = "160px")
             ),
-            plotlyOutput(ns("breakdown_bar"), height = "340px")
-          ),
-          nav_panel(
-            tagList("N Assays per Gene",
-                    .info_tip("Number of assays available per KO gene across all studies.")),
-            plotlyOutput(ns("assays_per_gene"), height = "400px")
+            plotlyOutput(ns("breakdown_bar"), height = "420px")
           )
-        )
+        ),
+
+        # ── Tab: N Assays per Gene ───────────────────────────────────────
+        nav_panel(
+          tagList("N Assays per Gene",
+                  .info_tip("Number of assays available per KO gene across all studies.")),
+          div(class = "p-3",
+              plotlyOutput(ns("assays_per_gene"), height = "480px")))
       ),
       full_screen = TRUE
     ),
@@ -168,46 +203,123 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
   moduleServer(id, function(input, output, session) {
 
     # =========================================================================
-    # 1. Assay Overview Table (RowGroup by Gene)
+    # 1. Studies Overview Table (RowGroup by Gene)
     # =========================================================================
 
-    output$assay_tbl <- DT::renderDT({
+    # Populate gene filter choices
+    observe({
+      si <- study_info_r()
+      genes <- sort(unique(na.omit(si$Gene)))
+      updateSelectizeInput(session, "tbl_gene_filter",
+                           choices = genes, selected = character(0))
+    })
+
+    # Reactive: filtered table data (shared by table + summary)
+    tbl_data_r <- reactive({
       si   <- study_info_r()
-      want <- c("Gene", "Model_system", "KO_strat", "Cell_Line", "DPC",
-                "Differentation_time_point", "Condition_levels", "Assay")
+      want <- c("Gene", "Study_title", "Comparison", "Model_system",
+                "Cell_Line", "Differentation_time_point", "Condition_details")
       cols <- want[want %in% colnames(si)]
       tbl  <- si[!duplicated(si$Assay), cols, drop = FALSE]
-      tbl  <- tbl[order(tbl$Gene, tbl$Model_system, tbl$Assay), ]
+
+      sel_genes <- input$tbl_gene_filter
+      if (length(sel_genes) > 0)
+        tbl <- tbl[tbl$Gene %in% sel_genes, ]
+
+      tbl[order(tbl$Gene, tbl$Model_system), ]
+    })
+
+    # Summary badges
+    output$tbl_summary <- renderUI({
+      tbl <- tbl_data_r()
+      n_genes  <- length(unique(na.omit(tbl$Gene)))
+      n_assays <- nrow(tbl)
+      div(
+        class = "d-flex gap-2 align-items-center mb-2",
+        style = "padding-bottom: 2px;",
+        tags$span(
+          class = "badge rounded-pill",
+          style = "background: #4E79A7; font-size: 0.78rem; font-weight: 500; padding: 6px 12px;",
+          paste(n_genes, "genes")
+        ),
+        tags$span(
+          class = "badge rounded-pill",
+          style = "background: #6c757d; font-size: 0.78rem; font-weight: 500; padding: 6px 12px;",
+          paste(n_assays, "assays")
+        )
+      )
+    })
+
+    output$assay_tbl <- DT::renderDT({
+      tbl <- tbl_data_r()
 
       gene_idx <- 0L
 
-      pretty <- c(Gene = "KO Gene", Model_system = "Model System",
-                  KO_strat = "KO Strategy", Cell_Line = "Cell Line", DPC = "DPC",
+      pretty <- c(Gene = "KO Gene", Study_title = "Study Title",
+                  Comparison = "Comparison", Model_system = "Model System",
+                  Cell_Line = "Cell Line",
                   Differentation_time_point = "Diff. Time Point",
-                  Condition_levels = "Condition Levels", Assay = "Assay")
+                  Condition_details = "Condition Details")
       colnames(tbl) <- pretty[colnames(tbl)]
+
+      # Truncate long study titles for display
+      tbl[["Study Title"]] <- ifelse(
+        nchar(tbl[["Study Title"]]) > 80,
+        paste0(substr(tbl[["Study Title"]], 1, 77), "\u2026"),
+        tbl[["Study Title"]]
+      )
 
       DT::datatable(
         tbl,
         rownames   = FALSE,
         selection  = "none",
-        filter     = "top",
-        extensions = c("Buttons", "RowGroup"),
+        extensions = "RowGroup",
         options    = list(
-          pageLength    = 100,
-          scrollX       = TRUE,
-          scrollY       = "600px",
+          pageLength     = 167,
+          scrollX        = TRUE,
+          scrollY        = "520px",
           scrollCollapse = TRUE,
-          dom           = "Bfrtip",
-          buttons       = list("csv", "excel"),
-          rowGroup      = list(dataSrc = gene_idx),
-          columnDefs    = list(
+          paging         = FALSE,
+          dom            = "rt",
+          rowGroup       = list(dataSrc = gene_idx),
+          columnDefs     = list(
             list(visible = FALSE, targets = gene_idx),
-            list(className = "dt-left", targets = "_all")
-          )
+            list(className = "dt-left", targets = "_all"),
+            list(width = "220px", targets = 1),
+            list(width = "130px", targets = 2)
+          ),
+          initComplete = DT::JS("
+            function(settings, json) {
+              $(this.api().table().header()).css({
+                'background-color': '#f1f3f5',
+                'color': '#495057',
+                'font-size': '0.82rem',
+                'font-weight': '600',
+                'letter-spacing': '0.01em',
+                'border-bottom': '2px solid #dee2e6'
+              });
+              $(this.api().table().node()).css('font-size', '0.85rem');
+            }
+          ")
         ),
-        class = "compact row-border hover"
-      )
+        class = "row-border hover nowrap"
+      ) |>
+        DT::formatStyle(
+          "Study Title",
+          fontSize = "0.82em", color = "#495057"
+        ) |>
+        DT::formatStyle(
+          "Condition Details",
+          fontSize = "0.8em", color = "#868e96", fontStyle = "italic"
+        ) |>
+        DT::formatStyle(
+          "Comparison",
+          fontWeight = "500", color = "#343a40"
+        ) |>
+        DT::formatStyle(
+          "Model System",
+          color = "#0d6efd", fontWeight = "500", fontSize = "0.85em"
+        )
     })
 
     # =========================================================================
@@ -354,9 +466,11 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
         con <- con_r()
         tryCatch(
           dbGetQuery(con, sprintf(
-            'SELECT DISTINCT symbol AS gene, "%s" AS annotation
-             FROM "%s"
-             WHERE symbol IS NOT NULL AND "%s" IS NOT NULL',
+            'SELECT DISTINCT s.Gene AS gene, p."%s" AS annotation
+             FROM "%s" p
+             INNER JOIN (SELECT DISTINCT Gene FROM study_info WHERE Gene IS NOT NULL) s
+               ON p.symbol = s.Gene
+             WHERE p."%s" IS NOT NULL',
             ph_col, tbl_name, ph_col)),
           error = function(e) NULL)
       })
@@ -433,7 +547,7 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
 
     # ── Suspend all outputs until visible ─────────────────────────────────────
     invisible(lapply(
-      c("assay_tbl", "breakdown_bar", "assays_per_gene",
+      c("assay_tbl", "tbl_summary", "breakdown_bar", "assays_per_gene",
         "ko_bar_reactome",     "ko_tbl_reactome",
         "ko_bar_go_bp",        "ko_tbl_go_bp",
         "ko_bar_go_mf",        "ko_tbl_go_mf",
