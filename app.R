@@ -60,7 +60,14 @@ ui <- page_navbar(
         deg_annotationsUI("deg_annotations"))
   ),
 
-  nav_spacer()
+  nav_spacer(),
+  nav_item(
+    tags$span(
+      class = "badge rounded-pill bg-secondary",
+      style = "font-size: 0.65rem; opacity: 0.7; vertical-align: middle;",
+      "v1.0"
+    )
+  )
 )
 
 # ── Server ────────────────────────────────────────────────────────────────────

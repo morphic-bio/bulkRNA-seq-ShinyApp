@@ -4,12 +4,10 @@
 #
 # Sections:
 #   1. Top card with tabs: Studies Overview | Study Breakdown | N Assays/Gene
-#   2. Perturbation Coverage & Annotation — one card, tabs:
-#        Reactome | GO BP | GO MF | PANTHER Class
-#        Phenotype Associations (IMPC, HPO)
-#        Disease Associations   (OMIM, Orphanet)
+#   2. Functional Annotations — Reactome | GO BP | GO MF | PANTHER
+#   3. Disease & Phenotype Associations — IMPC | HPO | OMIM | Orphanet
 #
-# Requires helpers.R to be sourced first (.HP_SOURCES, .HP_GRP, .HP_N).
+# Requires helpers.R to be sourced first (.HP_REF_TBL, .dt_header_js, etc.).
 # Data contract:
 #   con_r        — reactive: open read-only DuckDB connection
 #   study_info_r — reactive: study_info data.frame
@@ -100,11 +98,11 @@ studies_overviewUI <- function(id) {
       full_screen = TRUE
     ),
 
-    # ── 2. Perturbation Coverage & Annotation ─────────────────────────────
+    # ── 2. Functional Annotations ──────────────────────────────────────────
     card(
       card_header(tagList(bsicons::bs_icon("intersect"),
-                          " Perturbation Coverage & Annotation",
-                          .info_tip("Percentage of MorPhiC KO genes found in pathway, phenotype, and disease annotation databases."))),
+                          " Functional Annotations",
+                          .info_tip("Percentage of MorPhiC KO genes found in pathway and protein annotation databases."))),
       navset_tab(
 
         # ── Reactome ─────────────────────────────────────────────────────────
@@ -119,7 +117,7 @@ studies_overviewUI <- function(id) {
 
         # ── GO Biological Process ─────────────────────────────────────────────
         nav_panel(
-          tagList("GO Biological Process",
+          tagList("GO BP",
                   .info_tip("Overlap between MorPhiC KO genes and GO Biological Process terms.")),
           navset_tab(
             nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_go_bp"),         height = "400px")),
@@ -129,7 +127,7 @@ studies_overviewUI <- function(id) {
 
         # ── GO Molecular Function ─────────────────────────────────────────────
         nav_panel(
-          tagList("GO Molecular Function",
+          tagList("GO MF",
                   .info_tip("Overlap between MorPhiC KO genes and GO Molecular Function terms.")),
           navset_tab(
             nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_go_mf"),         height = "400px")),
@@ -139,59 +137,66 @@ studies_overviewUI <- function(id) {
 
         # ── PANTHER Protein Class ─────────────────────────────────────────────
         nav_panel(
-          tagList("PANTHER Protein Class",
+          tagList("PANTHER",
                   .info_tip("Overlap between MorPhiC KO genes and PANTHER protein class annotations.")),
           navset_tab(
             nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_panther_class"), height = "400px")),
             nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_panther_class"))))
           )
-        ),
+        )
 
-        # ── Phenotype Associations ────────────────────────────────────────────
+      ), # end navset_tab
+      full_screen = TRUE
+    ),
+
+    # ── 3. Disease & Phenotype Associations ─────────────────────────────────
+    card(
+      card_header(tagList(bsicons::bs_icon("card-list"),
+                          " Disease & Phenotype Associations",
+                          .info_tip("Phenotype and disease annotations for MorPhiC KO genes from IMPC, HPO, OMIM, and Orphanet databases."))),
+      navset_tab(
+
+        # ── IMPC Mouse Phenotypes ────────────────────────────────────────────
         nav_panel(
-          tagList("Phenotype Associations",
-                  .info_tip("Phenotype annotations for MorPhiC KO genes from IMPC mouse and HPO human databases.")),
+          tagList("IMPC",
+                  .info_tip("Mouse phenotype annotations from the International Mouse Phenotyping Consortium.")),
           navset_tab(
-            nav_panel(
-              "IMPC Mouse Phenotypes",
-              navset_tab(
-                nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_impc"), height = "480px")),
-                nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_impc"))))
-              )
-            ),
-            nav_panel(
-              "HPO Human Phenotypes",
-              navset_tab(
-                nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_hpo"),  height = "480px")),
-                nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_hpo"))))
-              )
-            )
+            nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_impc"), height = "480px")),
+            nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_impc"))))
           )
         ),
 
-        # ── Disease Associations ──────────────────────────────────────────────
+        # ── HPO Human Phenotypes ─────────────────────────────────────────────
         nav_panel(
-          tagList("Disease Associations",
-                  .info_tip("Disease annotations for MorPhiC KO genes from OMIM and Orphanet databases.")),
+          tagList("HPO",
+                  .info_tip("Human phenotype annotations from the Human Phenotype Ontology.")),
           navset_tab(
-            nav_panel(
-              "OMIM",
-              navset_tab(
-                nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_omim"),     height = "480px")),
-                nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_omim"))))
-              )
-            ),
-            nav_panel(
-              "Orphanet",
-              navset_tab(
-                nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_orphanet"), height = "480px")),
-                nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_orphanet"))))
-              )
-            )
+            nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_hpo"),  height = "480px")),
+            nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_hpo"))))
+          )
+        ),
+
+        # ── OMIM ──────────────────────────────────────────────────────────────
+        nav_panel(
+          tagList("OMIM",
+                  .info_tip("Disease annotations from Online Mendelian Inheritance in Man.")),
+          navset_tab(
+            nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_omim"),     height = "480px")),
+            nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_omim"))))
+          )
+        ),
+
+        # ── Orphanet ──────────────────────────────────────────────────────────
+        nav_panel(
+          tagList("Orphanet",
+                  .info_tip("Rare disease annotations from the Orphanet database.")),
+          navset_tab(
+            nav_panel("Bar Chart", plotlyOutput(ns("ko_bar_orphanet"), height = "480px")),
+            nav_panel("Table",     div(class = "p-2", DTOutput(ns("ko_tbl_orphanet"))))
           )
         )
 
-      ), # end outer navset_tab
+      ), # end navset_tab
       full_screen = TRUE
     )
   )
@@ -288,19 +293,7 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
             list(width = "220px", targets = 1),
             list(width = "130px", targets = 2)
           ),
-          initComplete = DT::JS("
-            function(settings, json) {
-              $(this.api().table().header()).css({
-                'background-color': '#f1f3f5',
-                'color': '#495057',
-                'font-size': '0.82rem',
-                'font-weight': '600',
-                'letter-spacing': '0.01em',
-                'border-bottom': '2px solid #dee2e6'
-              });
-              $(this.api().table().node()).css('font-size', '0.85rem');
-            }
-          ")
+          initComplete = .dt_header_js
         ),
         class = "row-border hover nowrap"
       ) |>
@@ -378,7 +371,7 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
     })
 
     # =========================================================================
-    # 4. Perturbation Coverage & Annotation
+    # 4. Functional Annotations (Reactome, GO, PANTHER)
     # =========================================================================
 
     # ── 4a. Pathway / GO / PANTHER  (on-the-fly via ref tables) ──────────────
@@ -442,7 +435,8 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
                       extensions = "Buttons",
                       options = list(pageLength = 25, scrollX = TRUE,
                                      scrollY = "420px", scrollCollapse = TRUE,
-                                     dom = "Bfrtip", buttons = list("csv", "excel")),
+                                     dom = "Bfrtip", buttons = list("csv", "excel"),
+                                     initComplete = .dt_header_js),
                       class = "compact row-border hover")
       })
     }
@@ -457,7 +451,9 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
     output$ko_bar_panther_class <- .ko_render_bar(ko_data_panther_class, "PANTHER Protein Class",  "#B07AA1")
     output$ko_tbl_panther_class <- .ko_render_tbl(ko_data_panther_class)
 
-    # ── 4b. Phenotype / Disease annotation tables (term-centric) ─────────────
+    # =========================================================================
+    # 5. Disease & Phenotype Associations (IMPC, HPO, OMIM, Orphanet)
+    # =========================================================================
 
     # Query distinct gene-annotation pairs from a flat annotation table.
     # Returns data.frame with columns: gene, annotation
@@ -528,7 +524,8 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
                       extensions = "Buttons",
                       options = list(pageLength = 25, scrollX = TRUE,
                                      scrollY = "420px", scrollCollapse = TRUE,
-                                     dom = "Bfrtip", buttons = list("csv", "excel")),
+                                     dom = "Bfrtip", buttons = list("csv", "excel"),
+                                     initComplete = .dt_header_js),
                       class = "compact row-border hover")
       })
     }

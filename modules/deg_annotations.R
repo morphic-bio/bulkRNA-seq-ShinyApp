@@ -2,12 +2,14 @@
 # Module: deg_annotations
 # Page 3 — Assay Analysis
 #
-# One card, shared assay picker, 5 tabs:
-#   1. Pathway Overlap       — Reactome (bar + table + gene chip)
-#   2. GO Overlap            — GO BP + GO MF (bar + table + gene chip each)
-#   3. Protein Class         — PANTHER Class (bar + table + gene chip)
-#   4. Phenotype Annotations — IMPC + HPO (sub-tabs: Top / Coverage / Table)
-#   5. Disease Annotations   — OMIM + Orphanet (sub-tabs: Top / Coverage / Table)
+# One card, shared assay picker, tabs grouped by:
+#   Functional Annotations:
+#     1. Pathway Overlap       — Reactome (bar + table + gene chip)
+#     2. GO Overlap            — GO BP + GO MF (bar + table + gene chip each)
+#     3. Protein Class         — PANTHER Class (bar + table + gene chip)
+#   Disease & Phenotype:
+#     4. Phenotype Annotations — IMPC + HPO (sub-tabs: Top / Coverage / Table)
+#     5. Disease Annotations   — OMIM + Orphanet (sub-tabs: Top / Coverage / Table)
 #
 # Requires helpers.R sourced first.
 # =============================================================================
@@ -92,8 +94,13 @@ deg_annotationsUI <- function(id) {
     # ── Gene banner (KO Gene, Model System, KO Strategy, etc.) ────────────
     uiOutput(ns("gene_banner")),
 
-    # ── 5 main tabs ─────────────────────────────────────────────────────────
+    # ── Tabs grouped into Functional / Disease & Phenotype ──────────────────
     navset_tab(
+
+      # ── Functional Annotations ─────────────────────────────────────────────
+      nav_menu(
+        title = "Functional Annotations",
+        icon  = bsicons::bs_icon("intersect"),
 
       # ── Tab 1: Pathway Overlap (Reactome) ──────────────────────────────────
       nav_panel(
@@ -191,7 +198,14 @@ deg_annotationsUI <- function(id) {
             )
           )
         )
-      ),
+      )
+
+      ), # end nav_menu "Functional Annotations"
+
+      # ── Disease & Phenotype Associations ───────────────────────────────────
+      nav_menu(
+        title = "Disease & Phenotype",
+        icon  = bsicons::bs_icon("card-list"),
 
       # ── Tab 4: Phenotype Annotations (IMPC, HPO) ───────────────────────────
       nav_panel(
@@ -313,6 +327,7 @@ deg_annotationsUI <- function(id) {
           )
         )
       )
+      ) # end nav_menu "Disease & Phenotype"
     ) # end navset_tab
   )   # end card
 }
@@ -465,7 +480,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
           selection = if (allow_select) "single" else "none",
           options = list(pageLength = 15, scrollX = TRUE,
                          scrollY = "300px", scrollCollapse = TRUE,
-                         dom = "frtip"),
+                         dom = "frtip",
+                         initComplete = .dt_header_js),
           class = "compact row-border hover"
         ) |>
           DT::formatStyle(
@@ -907,7 +923,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
           selection  = "single",
           extensions = "Buttons",
           options    = list(pageLength = 25, scrollX = TRUE,
-                            dom = "Bfrtip", buttons = c("csv", "excel")))
+                            dom = "Bfrtip", buttons = c("csv", "excel"),
+                            initComplete = .dt_header_js))
       })
     }
 

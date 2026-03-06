@@ -172,9 +172,10 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
           scrollY        = "185px",
           scrollCollapse = TRUE,
           ordering       = FALSE,
-          columnDefs     = list(list(className = "dt-left", targets = "_all"))
+          columnDefs     = list(list(className = "dt-left", targets = "_all")),
+          initComplete   = .dt_header_js
         ),
-        class = "compact row-border"
+        class = "compact row-border hover"
       )
     })
 
@@ -226,9 +227,10 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
             list(className = "dt-left",   targets = 0),
             list(className = "dt-center", targets = c(1, 2))
           ),
-          rowCallback    = .LFC_ROW_CB
+          rowCallback    = .LFC_ROW_CB,
+          initComplete   = .dt_header_js
         ),
-        class = "compact row-border"
+        class = "compact row-border hover"
       )
     })
 
@@ -262,9 +264,10 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
           columnDefs     = list(
             list(className = "dt-left",   targets = 0),
             list(className = "dt-center", targets = c(1, 2, 3))
-          )
+          ),
+          initComplete   = .dt_header_js
         ),
-        class = "compact row-border"
+        class = "compact row-border hover"
       ) |>
         DT::formatStyle(
           "% Overlap",

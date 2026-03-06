@@ -116,6 +116,31 @@ library(DT)
   )
 }
 
+# ── Shared DT header styling ───────────────────────────────────────────────
+
+.dt_header_js <- DT::JS("
+  function(settings, json) {
+    $(this.api().table().header()).css({
+      'background-color': '#f1f3f5',
+      'color': '#495057',
+      'font-size': '0.82rem',
+      'font-weight': '600',
+      'letter-spacing': '0.01em',
+      'border-bottom': '2px solid #dee2e6'
+    });
+    $(this.api().table().node()).css('font-size', '0.85rem');
+  }
+")
+
+# ── Empty state placeholder ────────────────────────────────────────────────
+
+.empty_state <- function(icon, title, subtitle = NULL) {
+  div(class = "text-center py-5", style = "color: #6c757d;",
+      bsicons::bs_icon(icon, size = "2.5rem"),
+      tags$h6(class = "mt-3 fw-semibold", title),
+      if (!is.null(subtitle)) tags$p(class = "text-muted small", subtitle))
+}
+
 # ── Data loader ───────────────────────────────────────────────────────────────
 
 load_deg_genes <- function(con, assay_names) {

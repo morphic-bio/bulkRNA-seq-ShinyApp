@@ -188,13 +188,9 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
     # ── Gene matrix (placeholder / DT switcher) ─────────────────────────────
     output$cmp_matrix_ui <- renderUI({
       if (is.null(input$cmp_assays) || length(input$cmp_assays) < 2) {
-        div(class = "text-center py-5",
-            style = "color: #6c757d;",
-            bsicons::bs_icon("grid-3x3-gap-fill", size = "3rem"),
-            tags$h5(class = "mt-3 fw-semibold",
-                    "Select 2 or more assays to view DEG comparison"),
-            tags$p(class = "text-muted",
-                   "Use the filters and assay picker on the left to get started."))
+        .empty_state("grid-3x3-gap-fill",
+                     "Select 2 or more assays to view DEG comparison",
+                     "Use the filters and assay picker on the left to get started.")
       } else {
         DTOutput(session$ns("cmp_matrix_tbl"))
       }
@@ -237,8 +233,9 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
                                           targets = seq_along(ko_cols) + 1),
                                      list(width = "90px",
                                           targets = seq_along(ko_cols) + 1)),
-                                   rowCallback = .LFC_ROW_CB),
-                    class = "compact cell-border hover") |>
+                                   rowCallback = .LFC_ROW_CB,
+                                   initComplete = .dt_header_js),
+                    class = "compact row-border hover") |>
         DT::formatStyle("N_Assays",
                         background = DT::styleColorBar(c(0, length(assays)), "#d4e6f1"),
                         backgroundSize = "100% 80%", backgroundRepeat = "no-repeat",
