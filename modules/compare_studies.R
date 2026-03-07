@@ -26,55 +26,96 @@ compare_studiesUI <- function(id) {
     card(
       card_header(tagList(bsicons::bs_icon("grid-3x3-gap-fill"), " Assay Comparison",
                           .info_tip("Compare differentially expressed genes across multiple assays side-by-side."))),
-      layout_columns(
-        col_widths = c(3, 9),
+      card_body(
+        # ── Top filter bar ──────────────────────────────────────────────
+        layout_columns(
+          col_widths = c(4, 8),
 
-        # Left: filter + picker
-        card(card_body(
-          tags$p(class = "fw-semibold small mb-1", "Filter assay list:"),
-          selectInput(ns("cmp_filter_gene"),  "KO Gene",
-                      choices = NULL, multiple = TRUE, width = "100%"),
-          selectInput(ns("cmp_filter_model"), "Model System",
-                      choices = NULL, multiple = TRUE, width = "100%"),
-          selectInput(ns("cmp_filter_kos"),   "KO Strategy",
-                      choices = NULL, multiple = TRUE, width = "100%"),
-          tags$hr(class = "my-2"),
-          selectizeInput(ns("cmp_assays"), "Select assays to compare:",
-                         choices = NULL, selected = NULL, multiple = TRUE,
-                         options = list(placeholder = "Choose assays\u2026",
-                                        plugins     = list("remove_button"),
-                                        maxItems    = NULL),
-                         width = "100%"),
-          selectInput(ns("cmp_dir"), "Direction",
-                      choices  = c("All" = "all", "Up only" = "up",
-                                   "Down only" = "down"),
-                      selected = "all"),
-          tags$p(class = "text-muted small mt-1", "Select 2 or more assays.")
-        )),
+          # Left: assay picker
+          div(
+            div(class = "d-flex align-items-center justify-content-between mb-1",
+                div(class = "d-flex align-items-center gap-2",
+                    tags$span(class = "fw-semibold small", "Select assays"),
+                    actionButton(ns("cmp_clear_assays"),
+                                 tagList(bsicons::bs_icon("x-lg", size = "0.6rem"), " Clear selection"),
+                                 class = "btn btn-link btn-sm p-0",
+                                 style = "font-size: 0.7rem; text-decoration: none; color: #212529;")),
+                uiOutput(ns("cmp_match_count"), inline = TRUE)),
+            selectizeInput(ns("cmp_assays"), NULL,
+                           choices = NULL, selected = NULL, multiple = TRUE,
+                           options = list(placeholder = "Choose assays\u2026",
+                                          plugins     = list("remove_button"),
+                                          maxItems    = NULL),
+                           width = "100%"),
+            uiOutput(ns("cmp_no_assays"))
+          ),
 
-        # Right: metadata + tabbed results
-        card(card_body(
-          uiOutput(ns("cmp_meta_above")),
-          navset_tab(
-            nav_panel(tagList("Gene Matrix",
-                            .info_tip("Matrix showing DEG direction per gene across selected assays. Sorted by number of assays.")),
-                      div(class = "pt-2", uiOutput(ns("cmp_matrix_ui")))),
-            nav_panel(tagList("UpSet Plot",
-                            .info_tip("Intersection plot showing overlap and unique DEG sets across selected assays.")),
-                      div(class = "pt-2",
-                          div(class = "d-flex align-items-center gap-3 mb-2",
-                              tags$label("Direction:", class = "mb-0 small fw-semibold"),
-                              radioButtons(ns("cmp_upset_dir"), NULL,
-                                           choices  = c("\u2191 Up" = "up",
-                                                        "\u2193 Down" = "down",
-                                                        "\u2191\u2193 All DEGs" = "all"),
-                                           selected = "up", inline = TRUE)),
-                          plotOutput(ns("cmp_upset"), height = "460px"))),
-            nav_panel(tagList("Common DEGs",
-                            .info_tip("Genes differentially expressed in the same direction across all selected assays.")),
-                      div(class = "pt-2", uiOutput(ns("cmp_consensus"))))
+          # Right: collapsible filters
+          div(
+            div(class = "d-flex align-items-center gap-2 mb-1",
+                tags$button(
+                  type = "button",
+                  class = "btn btn-outline-secondary btn-sm d-flex align-items-center gap-1",
+                  `data-bs-toggle` = "collapse",
+                  `data-bs-target` = paste0("#", ns("cmp_filter_panel")),
+                  `aria-expanded` = "false",
+                  `aria-controls` = ns("cmp_filter_panel"),
+                  bsicons::bs_icon("funnel", size = "0.75rem"),
+                  "Filters",
+                  uiOutput(ns("cmp_filter_badge"), inline = TRUE)
+                ),
+                actionButton(ns("cmp_clear_filters"),
+                             tagList(bsicons::bs_icon("x-lg", size = "0.6rem"), " Clear"),
+                             class = "btn btn-link btn-sm p-0",
+                             style = "font-size: 0.7rem; text-decoration: none; color: #212529;")
+            ),
+            div(id = ns("cmp_filter_panel"), class = "collapse",
+                div(class = "pt-2",
+                    layout_columns(
+                      col_widths = c(4, 4, 4),
+                      selectInput(ns("cmp_filter_gene"),  "KO Gene",
+                                  choices = NULL, multiple = TRUE, width = "100%"),
+                      selectInput(ns("cmp_filter_model"), "Model System",
+                                  choices = NULL, multiple = TRUE, width = "100%"),
+                      selectInput(ns("cmp_filter_comp"),  "Comparison",
+                                  choices = NULL, multiple = TRUE, width = "100%")
+                    )
+                )
+            )
           )
-        ))
+        ),
+
+        tags$hr(class = "my-2"),
+
+        # ── Results ─────────────────────────────────────────────────────
+        uiOutput(ns("cmp_meta_above")),
+        navset_tab(
+          nav_panel(tagList("Gene Matrix",
+                          .info_tip("Matrix showing DEG direction per gene across selected assays. Sorted by number of assays.")),
+                    div(class = "pt-2",
+                        div(class = "d-flex align-items-center gap-3 mb-2",
+                            tags$label("Direction:", class = "mb-0 small fw-semibold"),
+                            radioButtons(ns("cmp_matrix_dir"), NULL,
+                                         choices  = c("\u2191 Up" = "up",
+                                                      "\u2193 Down" = "down",
+                                                      "\u2191\u2193 All DEGs" = "all"),
+                                         selected = "all", inline = TRUE)),
+                        uiOutput(ns("cmp_matrix_ui")))),
+          nav_panel(tagList("UpSet Plot",
+                          .info_tip("Intersection plot showing overlap and unique DEG sets across selected assays.")),
+                    div(class = "pt-2",
+                        div(class = "d-flex align-items-center gap-3 mb-2",
+                            tags$label("Direction:", class = "mb-0 small fw-semibold"),
+                            radioButtons(ns("cmp_upset_dir"), NULL,
+                                         choices  = c("\u2191 Up" = "up",
+                                                      "\u2193 Down" = "down",
+                                                      "\u2191\u2193 All DEGs" = "all"),
+                                         selected = "up", inline = TRUE)),
+                        plotOutput(ns("cmp_upset"), height = "460px"))),
+          nav_panel(tagList("Common DEGs",
+                          .info_tip("Genes differentially expressed in the same direction across all selected assays.")),
+                    div(class = "pt-2", uiOutput(ns("cmp_consensus"))))
+        )
       ),
       full_screen = TRUE
     )
@@ -95,8 +136,8 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       updateSelectInput(session, "cmp_filter_model",
                         choices  = sort(unique(na.omit(si$Model_system))),
                         selected = character(0))
-      updateSelectInput(session, "cmp_filter_kos",
-                        choices  = sort(unique(na.omit(si$KO_strat))),
+      updateSelectInput(session, "cmp_filter_comp",
+                        choices  = sort(unique(na.omit(si$Comparison))),
                         selected = character(0))
     })
 
@@ -108,8 +149,8 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
         si_uniq <- si_uniq[si_uniq$Gene         %in% input$cmp_filter_gene,  ]
       if (length(input$cmp_filter_model) > 0)
         si_uniq <- si_uniq[si_uniq$Model_system %in% input$cmp_filter_model, ]
-      if (length(input$cmp_filter_kos)   > 0)
-        si_uniq <- si_uniq[si_uniq$KO_strat     %in% input$cmp_filter_kos,   ]
+      if (length(input$cmp_filter_comp)  > 0)
+        si_uniq <- si_uniq[si_uniq$Comparison   %in% input$cmp_filter_comp, ]
       sort(si_uniq$Assay)
     })
 
@@ -118,6 +159,49 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       kept <- intersect(isolate(input$cmp_assays), ch)
       updateSelectizeInput(session, "cmp_assays",
                            choices = ch, selected = kept, server = TRUE)
+    })
+
+    output$cmp_no_assays <- renderUI({
+      if (length(filtered_cmp_assays()) == 0)
+        tags$p(class = "text-muted small fst-italic mb-0 mt-1",
+               "No assays match the current filters.")
+    })
+
+    # ── Match count badge ───────────────────────────────────────────────────
+    output$cmp_match_count <- renderUI({
+      n <- length(filtered_cmp_assays())
+      tags$span(
+        class = "badge rounded-pill",
+        style = "font-size: 0.7rem; background: #6c757d; color: white;",
+        paste0(n, " assay", if (n != 1) "s")
+      )
+    })
+
+    # ── Active filter count badge ─────────────────────────────────────────────
+    output$cmp_filter_badge <- renderUI({
+      n <- sum(
+        length(input$cmp_filter_gene)  > 0,
+        length(input$cmp_filter_model) > 0,
+        length(input$cmp_filter_comp)  > 0
+      )
+      if (n > 0) {
+        tags$span(class = "badge rounded-pill bg-primary",
+                  style = "font-size:0.65rem;", n)
+      }
+    })
+
+    # ── Clear all filters ────────────────────────────────────────────────────
+    observeEvent(input$cmp_clear_filters, {
+      updateSelectInput(session, "cmp_filter_gene",  selected = character(0))
+      updateSelectInput(session, "cmp_filter_model", selected = character(0))
+      updateSelectInput(session, "cmp_filter_comp",  selected = character(0))
+    })
+
+    # ── Clear assay selection ──────────────────────────────────────────────────
+    observeEvent(input$cmp_clear_assays, {
+      ch <- filtered_cmp_assays()
+      updateSelectizeInput(session, "cmp_assays",
+                           choices = ch, selected = character(0), server = TRUE)
     })
 
     # ── DEG gene data (lazy, selected assays only) ────────────────────────────
@@ -135,18 +219,6 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
                              colnames(study_info_r()))
       meta <- study_info_r()[!duplicated(study_info_r()$Assay), meta_cols]
       merge(rows, meta, by.x = "assay", by.y = "Assay", all.x = TRUE)
-    })
-
-    # ── Per-assay gene sets ───────────────────────────────────────────────────
-    cmp_sets <- reactive({
-      genes  <- cmp_genes_data(); req(genes)
-      assays <- input$cmp_assays; req(assays, length(assays) >= 2)
-      dir    <- input$cmp_dir
-      sub    <- genes[genes$assay %in% assays, ]
-      if (dir == "up")   sub <- sub[sub$DEG == "up",   ]
-      if (dir == "down") sub <- sub[sub$DEG == "down", ]
-      lapply(setNames(assays, assays),
-             function(a) unique(na.omit(sub$symbol[sub$assay == a])))
     })
 
     # ── Metadata header ───────────────────────────────────────────────────────
@@ -190,7 +262,7 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       if (is.null(input$cmp_assays) || length(input$cmp_assays) < 2) {
         .empty_state("grid-3x3-gap-fill",
                      "Select 2 or more assays to view DEG comparison",
-                     "Use the filters and assay picker on the left to get started.")
+                     "Use the filters and assay picker above to get started.")
       } else {
         DTOutput(session$ns("cmp_matrix_tbl"))
       }
@@ -198,8 +270,9 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
 
     # ── Gene matrix ───────────────────────────────────────────────────────────
     output$cmp_matrix_tbl <- DT::renderDT({
-      sets     <- cmp_sets(); req(sets, length(sets) >= 2)
-      genes_df <- cmp_genes_data(); assays <- names(sets); dir <- input$cmp_dir
+      genes_df <- cmp_genes_data(); req(genes_df)
+      assays   <- input$cmp_assays; req(assays, length(assays) >= 2)
+      dir      <- input$cmp_matrix_dir
       sub <- genes_df[genes_df$assay %in% assays, ]
       if (dir == "up")   sub <- sub[sub$DEG == "up",   ]
       if (dir == "down") sub <- sub[sub$DEG == "down", ]
@@ -223,10 +296,10 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       mat$N_Assays <- rowSums(mat[, ko_cols, drop = FALSE] != "")
       mat <- mat[, c("Gene", "N_Assays", ko_cols)]
       mat <- mat[order(-mat$N_Assays), ]
-      DT::datatable(mat, rownames = FALSE, filter = "top", extensions = "Buttons",
+      DT::datatable(mat, rownames = FALSE, filter = "top",
                     options = list(pageLength = 25, scrollX = TRUE,
                                    scrollY = "460px", scrollCollapse = TRUE,
-                                   dom = "Bfrtip", buttons = list("csv", "excel"),
+                                   dom = "frtip",
                                    fixedColumns = list(leftColumns = 2),
                                    columnDefs = list(
                                      list(className = "dt-center",
@@ -276,11 +349,11 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
                     keep.order = TRUE, mb.ratio = c(0.60, 0.40))
     })
 
-    # ── Consensus DEGs ────────────────────────────────────────────────────────
-    output$cmp_consensus <- renderUI({
+    # ── Consensus DEGs data ──────────────────────────────────────────────────
+    cmp_consensus_data <- reactive({
       genes_df <- cmp_genes_data(); req(genes_df)
       assays   <- input$cmp_assays; req(assays, length(assays) >= 2)
-      n        <- length(assays)
+
       up_per <- lapply(assays, function(a)
         unique(na.omit(genes_df$symbol[genes_df$assay == a & genes_df$DEG == "up"])))
       dn_per <- lapply(assays, function(a)
@@ -288,39 +361,86 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       up_all <- sort(Reduce(intersect, up_per))
       dn_all <- sort(Reduce(intersect, dn_per))
 
-      chip <- function(g, bg)
-        tags$span(style = paste0("background-color:", bg, "; color:white; font-size:0.78rem;",
-                                 " font-weight:600; padding:0.28em 0.6em; border-radius:4px;",
-                                 " display:inline-block; margin:2px 3px 2px 0;"), g)
-
-      make_section <- function(genes, label, bg, border_col) {
-        n_g <- length(genes)
-        hdr  <- tags$div(class = "fw-bold mb-1", style = paste0("color:", border_col, ";"),
-                         label,
-                         if (n_g > 0) tags$span(class = "fw-normal text-muted ms-1",
-                                                paste0("(", n_g, " gene",
-                                                       if (n_g == 1) "" else "s", ")")))
-        body <- if (n_g == 0)
-          tags$p(class = "text-muted small mb-0", "No genes shared across all assays.")
-        else
-          div(class = "d-flex flex-wrap", lapply(genes, chip, bg = bg))
-        div(class = "mb-3 p-2 rounded",
-            style = paste0("border-left: 4px solid ", border_col, "; background:#fafafa;"),
-            hdr, body)
+      build_tbl <- function(genes, direction) {
+        if (length(genes) == 0) return(data.frame(Gene = character(0)))
+        sub <- genes_df[genes_df$symbol %in% genes & genes_df$DEG == direction &
+                        genes_df$assay %in% assays, ]
+        df <- data.frame(Gene = genes, stringsAsFactors = FALSE)
+        for (a in assays) {
+          lbl <- if (nchar(a) > 35) paste0("\u2026", substr(a, nchar(a)-34, nchar(a))) else a
+          a_sub <- sub[sub$assay == a, ]
+          if ("log2fc" %in% names(a_sub)) {
+            lfc_map <- setNames(a_sub$log2fc, a_sub$symbol)
+            df[[lbl]] <- round(lfc_map[genes], 2)
+          }
+        }
+        df
       }
+
+      list(up_tbl = build_tbl(up_all, "up"),
+           dn_tbl = build_tbl(dn_all, "down"),
+           n_assays = length(assays))
+    })
+
+    # ── Consensus DEGs layout ────────────────────────────────────────────────
+    output$cmp_consensus <- renderUI({
+      cd <- cmp_consensus_data(); req(cd)
+      n    <- cd$n_assays
+      n_up <- nrow(cd$up_tbl)
+      n_dn <- nrow(cd$dn_tbl)
+
+      up_count <- tags$span(class = "fw-normal text-muted ms-1",
+                            paste0("(", n_up, " gene", if (n_up != 1) "s", ")"))
+      dn_count <- tags$span(class = "fw-normal text-muted ms-1",
+                            paste0("(", n_dn, " gene", if (n_dn != 1) "s", ")"))
 
       tagList(
         tags$p(class = "text-muted small mb-3",
                paste0("Genes regulated in the same direction across all ",
                       n, " selected assays.")),
-        make_section(up_all, "\u2191 Up in all assays", "#E74C3C", "#C0392B"),
-        make_section(dn_all, "\u2193 Down in all assays", "#5DADE2", "#2C7BB6")
+        layout_columns(
+          col_widths = c(6, 6),
+          div(
+            tags$div(class = "fw-bold mb-2", style = "color: #C0392B;",
+                     "\u2191 Up-regulated in all assays", up_count),
+            if (n_up == 0)
+              tags$p(class = "text-muted small", "No genes shared across all assays.")
+            else
+              DTOutput(session$ns("cmp_consensus_up_tbl"))
+          ),
+          div(
+            tags$div(class = "fw-bold mb-2", style = "color: #2C7BB6;",
+                     "\u2193 Down-regulated in all assays", dn_count),
+            if (n_dn == 0)
+              tags$p(class = "text-muted small", "No genes shared across all assays.")
+            else
+              DTOutput(session$ns("cmp_consensus_dn_tbl"))
+          )
+        )
       )
+    })
+
+    # ── Consensus Up table ───────────────────────────────────────────────────
+    output$cmp_consensus_up_tbl <- DT::renderDT({
+      cd <- cmp_consensus_data(); req(cd, nrow(cd$up_tbl) > 0)
+      DT::datatable(cd$up_tbl, rownames = FALSE,
+                    options = list(pageLength = 15, scrollX = TRUE,
+                                   dom = "ftip", initComplete = .dt_header_js),
+                    class = "compact row-border hover")
+    })
+
+    # ── Consensus Down table ─────────────────────────────────────────────────
+    output$cmp_consensus_dn_tbl <- DT::renderDT({
+      cd <- cmp_consensus_data(); req(cd, nrow(cd$dn_tbl) > 0)
+      DT::datatable(cd$dn_tbl, rownames = FALSE,
+                    options = list(pageLength = 15, scrollX = TRUE,
+                                   dom = "ftip", initComplete = .dt_header_js),
+                    class = "compact row-border hover")
     })
 
     # ── Suspend outputs until tab is active ───────────────────────────────────
     invisible(lapply(
-      c("cmp_meta_above", "cmp_matrix_ui", "cmp_matrix_tbl", "cmp_upset", "cmp_consensus"),
+      c("cmp_no_assays", "cmp_match_count", "cmp_filter_badge", "cmp_meta_above", "cmp_matrix_ui", "cmp_matrix_tbl", "cmp_upset", "cmp_consensus", "cmp_consensus_up_tbl", "cmp_consensus_dn_tbl"),
       function(oid) outputOptions(output, oid, suspendWhenHidden = TRUE)
     ))
 
