@@ -17,6 +17,7 @@
 library(plotly)
 library(DT)
 library(dplyr)
+library(shinyWidgets)
 
 # ── Phenotype annotation constants ────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ deg_annotationsUI <- function(id) {
       layout_columns(
         col_widths = c(4, 8),
 
-        # Left: assay picker
+        # Left: assay picker + filter dropdown
         div(
           div(class = "d-flex align-items-center justify-content-between mb-1",
               div(class = "d-flex align-items-center gap-2",
@@ -91,50 +92,32 @@ deg_annotationsUI <- function(id) {
                          choices = NULL, selected = NULL, multiple = FALSE,
                          options = list(placeholder = "Choose an assay\u2026"),
                          width = "100%"),
-          uiOutput(ns("deg_no_assays"))
-        ),
-
-        # Right: collapsible filters
-        div(
-          div(class = "d-flex align-items-center gap-2 mb-1",
-              tags$button(
-                type = "button",
-                class = "btn btn-outline-secondary btn-sm d-flex align-items-center gap-1",
-                `data-bs-toggle` = "collapse",
-                `data-bs-target` = paste0("#", ns("deg_filter_panel")),
-                `aria-expanded` = "false",
-                `aria-controls` = ns("deg_filter_panel"),
-                bsicons::bs_icon("funnel", size = "0.75rem"),
-                "Filters",
-                uiOutput(ns("deg_filter_badge"), inline = TRUE)
-              ),
-              actionButton(ns("deg_clear_filters"),
-                           tagList(bsicons::bs_icon("x-lg", size = "0.6rem"), " Clear"),
-                           class = "btn btn-link btn-sm p-0",
-                           style = "font-size: 0.7rem; text-decoration: none; color: #212529;")
-          ),
-          div(id = ns("deg_filter_panel"), class = "collapse",
-              div(class = "pt-2",
-                  layout_columns(
-                    col_widths = c(4, 4, 4),
-                    selectInput(ns("deg_filter_gene"),  "KO Gene",
-                                choices = NULL, multiple = TRUE, width = "100%"),
-                    selectInput(ns("deg_filter_model"), "Model System",
-                                choices = NULL, multiple = TRUE, width = "100%"),
-                    selectInput(ns("deg_filter_comp"),  "Comparison",
-                                choices = NULL, multiple = TRUE, width = "100%")
-                  )
+          uiOutput(ns("deg_no_assays")),
+          div(class = "mt-1",
+              dropdownButton(
+                tags$h6(class = "fw-semibold mb-3", "Filter assays"),
+                selectInput(ns("deg_filter_gene"),  "KO Gene",
+                            choices = NULL, multiple = TRUE, width = "100%"),
+                selectInput(ns("deg_filter_model"), "Model System",
+                            choices = NULL, multiple = TRUE, width = "100%"),
+                selectInput(ns("deg_filter_comp"),  "Comparison",
+                            choices = NULL, multiple = TRUE, width = "100%"),
+                actionButton(ns("deg_clear_filters"), "Clear all filters",
+                             class = "btn btn-outline-secondary btn-sm w-100 mt-1"),
+                circle = FALSE, status = "default", size = "sm",
+                icon = tagList(bsicons::bs_icon("funnel", size = "0.75rem"),
+                               uiOutput(ns("deg_filter_badge"), inline = TRUE)),
+                label = "Filters", width = "320px",
+                inline = TRUE,
+                inputId = ns("deg_filter_dropdown")
               )
           )
-        )
+        ),
+
+        # Right: selected assay metadata card
+        uiOutput(ns("deg_meta_above"))
       )
     ),
-
-    # ── Empty state when no assay selected ────────────────────────────────
-    uiOutput(ns("deg_no_selection")),
-
-    # ── Assay metadata card (shown when assay is selected) ─────────────────
-    uiOutput(ns("deg_meta_above")),
 
     # ── Tabs grouped into Functional / Disease & Phenotype ──────────────────
     navset_tab(
@@ -150,21 +133,27 @@ deg_annotationsUI <- function(id) {
                 .info_tip("Overlap between assay DEGs and Reactome pathway gene sets.")),
         div(
           class = "py-3 px-1",
-          uiOutput(ns("gs_ro")),
-          .deg_ctrl(ns, "ro"),
-          card(
-            navset_tab(
-              nav_panel("Bar Chart",
-                        plotlyOutput(ns("ro_bar"), height = "420px")),
-              nav_panel("Table",
-                        div(class = "p-2",
-                            tags$p(class = "text-muted small mb-1",
-                                   bsicons::bs_icon("table"),
-                                   " Click a row to see genes for that pathway."),
-                            DTOutput(ns("ro_tbl"))))
-            ),
-            uiOutput(ns("ro_gene_panel"))
-          )
+          conditionalPanel(
+            condition = sprintf("!input['%s'] || input['%s'] === ''", ns("deg_assay"), ns("deg_assay")),
+            .empty_state("diagram-3", "Select an assay to view plots",
+                         "Use the assay picker above to choose an assay.")),
+          conditionalPanel(
+            condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
+            uiOutput(ns("gs_ro")),
+            .deg_ctrl(ns, "ro"),
+            card(
+              navset_tab(
+                nav_panel("Bar Chart",
+                          plotlyOutput(ns("ro_bar"), height = "420px")),
+                nav_panel("Table",
+                          div(class = "p-2",
+                              tags$p(class = "text-muted small mb-1",
+                                     bsicons::bs_icon("table"),
+                                     " Click a row to see genes for that pathway."),
+                              DTOutput(ns("ro_tbl"))))
+              ),
+              uiOutput(ns("ro_gene_panel"))
+            ))
         )
       ),
 
@@ -174,21 +163,27 @@ deg_annotationsUI <- function(id) {
                 .info_tip("Overlap between assay DEGs and Gene Ontology Biological Process terms.")),
         div(
           class = "py-3 px-1",
-          uiOutput(ns("gs_gobp")),
-          .deg_ctrl(ns, "gobp"),
-          card(
-            navset_tab(
-              nav_panel("Bar Chart",
-                        plotlyOutput(ns("gobp_bar"), height = "420px")),
-              nav_panel("Table",
-                        div(class = "p-2",
-                            tags$p(class = "text-muted small mb-1",
-                                   bsicons::bs_icon("table"),
-                                   " Click a row to see genes for that GO term."),
-                            DTOutput(ns("gobp_tbl"))))
-            ),
-            uiOutput(ns("gobp_gene_panel"))
-          )
+          conditionalPanel(
+            condition = sprintf("!input['%s'] || input['%s'] === ''", ns("deg_assay"), ns("deg_assay")),
+            .empty_state("diagram-3", "Select an assay to view plots",
+                         "Use the assay picker above to choose an assay.")),
+          conditionalPanel(
+            condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
+            uiOutput(ns("gs_gobp")),
+            .deg_ctrl(ns, "gobp"),
+            card(
+              navset_tab(
+                nav_panel("Bar Chart",
+                          plotlyOutput(ns("gobp_bar"), height = "420px")),
+                nav_panel("Table",
+                          div(class = "p-2",
+                              tags$p(class = "text-muted small mb-1",
+                                     bsicons::bs_icon("table"),
+                                     " Click a row to see genes for that GO term."),
+                              DTOutput(ns("gobp_tbl"))))
+              ),
+              uiOutput(ns("gobp_gene_panel"))
+            ))
         )
       ),
 
@@ -198,21 +193,27 @@ deg_annotationsUI <- function(id) {
                 .info_tip("Overlap between assay DEGs and Gene Ontology Molecular Function terms.")),
         div(
           class = "py-3 px-1",
-          uiOutput(ns("gs_gomf")),
-          .deg_ctrl(ns, "gomf"),
-          card(
-            navset_tab(
-              nav_panel("Bar Chart",
-                        plotlyOutput(ns("gomf_bar"), height = "420px")),
-              nav_panel("Table",
-                        div(class = "p-2",
-                            tags$p(class = "text-muted small mb-1",
-                                   bsicons::bs_icon("table"),
-                                   " Click a row to see genes for that GO term."),
-                            DTOutput(ns("gomf_tbl"))))
-            ),
-            uiOutput(ns("gomf_gene_panel"))
-          )
+          conditionalPanel(
+            condition = sprintf("!input['%s'] || input['%s'] === ''", ns("deg_assay"), ns("deg_assay")),
+            .empty_state("diagram-3", "Select an assay to view plots",
+                         "Use the assay picker above to choose an assay.")),
+          conditionalPanel(
+            condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
+            uiOutput(ns("gs_gomf")),
+            .deg_ctrl(ns, "gomf"),
+            card(
+              navset_tab(
+                nav_panel("Bar Chart",
+                          plotlyOutput(ns("gomf_bar"), height = "420px")),
+                nav_panel("Table",
+                          div(class = "p-2",
+                              tags$p(class = "text-muted small mb-1",
+                                     bsicons::bs_icon("table"),
+                                     " Click a row to see genes for that GO term."),
+                              DTOutput(ns("gomf_tbl"))))
+              ),
+              uiOutput(ns("gomf_gene_panel"))
+            ))
         )
       ),
 
@@ -222,21 +223,27 @@ deg_annotationsUI <- function(id) {
                 .info_tip("Overlap between assay DEGs and PANTHER protein class annotations.")),
         div(
           class = "py-3 px-1",
-          uiOutput(ns("gs_pc")),
-          .deg_ctrl(ns, "pc"),
-          card(
-            navset_tab(
-              nav_panel("Bar Chart",
-                        plotlyOutput(ns("pc_bar"), height = "420px")),
-              nav_panel("Table",
-                        div(class = "p-2",
-                            tags$p(class = "text-muted small mb-1",
-                                   bsicons::bs_icon("table"),
-                                   " Click a row to see genes for that class."),
-                            DTOutput(ns("pc_tbl"))))
-            ),
-            uiOutput(ns("pc_gene_panel"))
-          )
+          conditionalPanel(
+            condition = sprintf("!input['%s'] || input['%s'] === ''", ns("deg_assay"), ns("deg_assay")),
+            .empty_state("diagram-3", "Select an assay to view plots",
+                         "Use the assay picker above to choose an assay.")),
+          conditionalPanel(
+            condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
+            uiOutput(ns("gs_pc")),
+            .deg_ctrl(ns, "pc"),
+            card(
+              navset_tab(
+                nav_panel("Bar Chart",
+                          plotlyOutput(ns("pc_bar"), height = "420px")),
+                nav_panel("Table",
+                          div(class = "p-2",
+                              tags$p(class = "text-muted small mb-1",
+                                     bsicons::bs_icon("table"),
+                                     " Click a row to see genes for that class."),
+                              DTOutput(ns("pc_tbl"))))
+              ),
+              uiOutput(ns("pc_gene_panel"))
+            ))
         )
       )
 
@@ -253,49 +260,55 @@ deg_annotationsUI <- function(id) {
                 .info_tip("IMPC mouse phenotype annotations for the assay's DEGs.")),
         div(
           class = "py-3 px-1",
-          uiOutput(ns("gs_ph")),
-          div(
-            class = "d-flex align-items-end flex-wrap gap-3 mb-2",
-            div(style = "min-width:180px;",
-                checkboxGroupInput(ns("ph_zyg"), "IMPC Zygosity",
-                                   choices  = c("Homozygote" = "homozygote",
-                                                "Heterozygote" = "heterozygote"),
-                                   selected = c("homozygote", "heterozygote"),
-                                   inline = TRUE)),
-            div(style = "min-width:180px; flex:1; max-width:280px;",
-                sliderInput(ns("ph_topn"), "Top N phenotypes", 5, 50, 20,
-                            step = 5, width = "100%")),
-            div(style = "min-width:200px;",
-                radioButtons(ns("ph_dir"), "Direction",
-                             choices  = c("Both" = "both",
-                                          "\u2191 Up only" = "up",
-                                          "\u2193 Down only" = "down"),
-                             selected = "both", inline = TRUE))
-          ),
-          navset_tab(
-            nav_panel(
-              tagList("Top Phenotypes",
-                      .info_tip("Most frequently annotated phenotypes among the assay's DEGs.")),
-              card(full_screen = TRUE, class = "mt-2",
-                   card_body(plotlyOutput(ns("ph_top"), height = "480px")))
+          conditionalPanel(
+            condition = sprintf("!input['%s'] || input['%s'] === ''", ns("deg_assay"), ns("deg_assay")),
+            .empty_state("diagram-3", "Select an assay to view plots",
+                         "Use the assay picker above to choose an assay.")),
+          conditionalPanel(
+            condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
+            uiOutput(ns("gs_ph")),
+            div(
+              class = "d-flex align-items-end flex-wrap gap-3 mb-2",
+              div(style = "min-width:180px;",
+                  checkboxGroupInput(ns("ph_zyg"), "IMPC Zygosity",
+                                     choices  = c("Homozygote" = "homozygote",
+                                                  "Heterozygote" = "heterozygote"),
+                                     selected = c("homozygote", "heterozygote"),
+                                     inline = TRUE)),
+              div(style = "min-width:180px; flex:1; max-width:280px;",
+                  sliderInput(ns("ph_topn"), "Top N phenotypes", 5, 50, 20,
+                              step = 5, width = "100%")),
+              div(style = "min-width:200px;",
+                  radioButtons(ns("ph_dir"), "Direction",
+                               choices  = c("Both" = "both",
+                                            "\u2191 Up only" = "up",
+                                            "\u2193 Down only" = "down"),
+                               selected = "both", inline = TRUE))
             ),
-            nav_panel(
-              tagList("Annotation Coverage",
-                      .info_tip("Proportion of up/down-regulated DEGs that have annotations in IMPC.")),
-              card(class = "mt-2",
-                   card_body(plotlyOutput(ns("ph_coverage"), height = "280px")))
-            ),
-            nav_panel(
-              "Table",
-              card(class = "mt-2",
-                   card_body(
-                     tags$p(class = "text-muted small mb-1",
-                            bsicons::bs_icon("table"),
-                            " Click a row to see up/down-regulated genes for that phenotype."),
-                     DTOutput(ns("ph_tbl")))),
-              uiOutput(ns("ph_gene_panel"))
-            )
-          )
+            navset_tab(
+              nav_panel(
+                tagList("Top Phenotypes",
+                        .info_tip("Most frequently annotated phenotypes among the assay's DEGs.")),
+                card(full_screen = TRUE, class = "mt-2",
+                     card_body(plotlyOutput(ns("ph_top"), height = "480px")))
+              ),
+              nav_panel(
+                tagList("Annotation Coverage",
+                        .info_tip("Proportion of up/down-regulated DEGs that have annotations in IMPC.")),
+                card(class = "mt-2",
+                     card_body(plotlyOutput(ns("ph_coverage"), height = "280px")))
+              ),
+              nav_panel(
+                "Table",
+                card(class = "mt-2",
+                     card_body(
+                       tags$p(class = "text-muted small mb-1",
+                              bsicons::bs_icon("table"),
+                              " Click a row to see up/down-regulated genes for that phenotype."),
+                       DTOutput(ns("ph_tbl")))),
+                uiOutput(ns("ph_gene_panel"))
+              )
+            ))
         )
       ),
 
@@ -305,43 +318,49 @@ deg_annotationsUI <- function(id) {
                 .info_tip("HPO human phenotype annotations for the assay's DEGs.")),
         div(
           class = "py-3 px-1",
-          uiOutput(ns("gs_hpo")),
-          div(
-            class = "d-flex align-items-end flex-wrap gap-3 mb-2",
-            div(style = "min-width:180px; flex:1; max-width:280px;",
-                sliderInput(ns("hpo_topn"), "Top N phenotypes", 5, 50, 20,
-                            step = 5, width = "100%")),
-            div(style = "min-width:200px;",
-                radioButtons(ns("hpo_dir"), "Direction",
-                             choices  = c("Both" = "both",
-                                          "\u2191 Up only" = "up",
-                                          "\u2193 Down only" = "down"),
-                             selected = "both", inline = TRUE))
-          ),
-          navset_tab(
-            nav_panel(
-              tagList("Top Phenotypes",
-                      .info_tip("Most frequently annotated HPO terms among the assay's DEGs.")),
-              card(full_screen = TRUE, class = "mt-2",
-                   card_body(plotlyOutput(ns("hpo_top"), height = "480px")))
+          conditionalPanel(
+            condition = sprintf("!input['%s'] || input['%s'] === ''", ns("deg_assay"), ns("deg_assay")),
+            .empty_state("diagram-3", "Select an assay to view plots",
+                         "Use the assay picker above to choose an assay.")),
+          conditionalPanel(
+            condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
+            uiOutput(ns("gs_hpo")),
+            div(
+              class = "d-flex align-items-end flex-wrap gap-3 mb-2",
+              div(style = "min-width:180px; flex:1; max-width:280px;",
+                  sliderInput(ns("hpo_topn"), "Top N phenotypes", 5, 50, 20,
+                              step = 5, width = "100%")),
+              div(style = "min-width:200px;",
+                  radioButtons(ns("hpo_dir"), "Direction",
+                               choices  = c("Both" = "both",
+                                            "\u2191 Up only" = "up",
+                                            "\u2193 Down only" = "down"),
+                               selected = "both", inline = TRUE))
             ),
-            nav_panel(
-              tagList("Annotation Coverage",
-                      .info_tip("Proportion of up/down-regulated DEGs that have annotations in HPO.")),
-              card(class = "mt-2",
-                   card_body(plotlyOutput(ns("hpo_coverage"), height = "280px")))
-            ),
-            nav_panel(
-              "Table",
-              card(class = "mt-2",
-                   card_body(
-                     tags$p(class = "text-muted small mb-1",
-                            bsicons::bs_icon("table"),
-                            " Click a row to see up/down-regulated genes for that phenotype."),
-                     DTOutput(ns("hpo_tbl")))),
-              uiOutput(ns("hpo_gene_panel"))
-            )
-          )
+            navset_tab(
+              nav_panel(
+                tagList("Top Phenotypes",
+                        .info_tip("Most frequently annotated HPO terms among the assay's DEGs.")),
+                card(full_screen = TRUE, class = "mt-2",
+                     card_body(plotlyOutput(ns("hpo_top"), height = "480px")))
+              ),
+              nav_panel(
+                tagList("Annotation Coverage",
+                        .info_tip("Proportion of up/down-regulated DEGs that have annotations in HPO.")),
+                card(class = "mt-2",
+                     card_body(plotlyOutput(ns("hpo_coverage"), height = "280px")))
+              ),
+              nav_panel(
+                "Table",
+                card(class = "mt-2",
+                     card_body(
+                       tags$p(class = "text-muted small mb-1",
+                              bsicons::bs_icon("table"),
+                              " Click a row to see up/down-regulated genes for that phenotype."),
+                       DTOutput(ns("hpo_tbl")))),
+                uiOutput(ns("hpo_gene_panel"))
+              )
+            ))
         )
       ),
 
@@ -351,47 +370,53 @@ deg_annotationsUI <- function(id) {
                 .info_tip("Disease annotations for DEGs from OMIM and Orphanet databases.")),
         div(
           class = "py-3 px-1",
-          uiOutput(ns("gs_di")),
-          div(
-            class = "d-flex align-items-end flex-wrap gap-3 mb-2",
-            div(style = "min-width:180px;",
-                radioButtons(ns("di_ds"), "Dataset",
-                             choices  = c("OMIM" = "omim", "Orphanet" = "orphanet"),
-                             selected = "omim", inline = TRUE)),
-            div(style = "min-width:180px; flex:1; max-width:280px;",
-                sliderInput(ns("di_topn"), "Top N shown", 5, 50, 20,
-                            step = 5, width = "100%")),
-            div(style = "min-width:200px;",
-                radioButtons(ns("di_dir"), "Direction",
-                             choices  = c("Both" = "both",
-                                          "\u2191 Up only" = "up",
-                                          "\u2193 Down only" = "down"),
-                             selected = "both", inline = TRUE))
-          ),
-          navset_tab(
-            nav_panel(
-              tagList("Top Annotations",
-                      .info_tip("Most frequently annotated disease terms among the assay's DEGs.")),
-              card(full_screen = TRUE, class = "mt-2",
-                   card_body(plotlyOutput(ns("di_top"), height = "480px")))
+          conditionalPanel(
+            condition = sprintf("!input['%s'] || input['%s'] === ''", ns("deg_assay"), ns("deg_assay")),
+            .empty_state("diagram-3", "Select an assay to view plots",
+                         "Use the assay picker above to choose an assay.")),
+          conditionalPanel(
+            condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
+            uiOutput(ns("gs_di")),
+            div(
+              class = "d-flex align-items-end flex-wrap gap-3 mb-2",
+              div(style = "min-width:180px;",
+                  radioButtons(ns("di_ds"), "Dataset",
+                               choices  = c("OMIM" = "omim", "Orphanet" = "orphanet"),
+                               selected = "omim", inline = TRUE)),
+              div(style = "min-width:180px; flex:1; max-width:280px;",
+                  sliderInput(ns("di_topn"), "Top N shown", 5, 50, 20,
+                              step = 5, width = "100%")),
+              div(style = "min-width:200px;",
+                  radioButtons(ns("di_dir"), "Direction",
+                               choices  = c("Both" = "both",
+                                            "\u2191 Up only" = "up",
+                                            "\u2193 Down only" = "down"),
+                               selected = "both", inline = TRUE))
             ),
-            nav_panel(
-              tagList("Annotation Coverage",
-                      .info_tip("Proportion of up/down-regulated DEGs that have annotations in the selected database.")),
-              card(class = "mt-2",
-                   card_body(plotlyOutput(ns("di_coverage"), height = "280px")))
-            ),
-            nav_panel(
-              "Table",
-              card(class = "mt-2",
-                   card_body(
-                     tags$p(class = "text-muted small mb-1",
-                            bsicons::bs_icon("table"),
-                            " Click a row to see up/down-regulated genes for that disease."),
-                     DTOutput(ns("di_tbl")))),
-              uiOutput(ns("di_gene_panel"))
-            )
-          )
+            navset_tab(
+              nav_panel(
+                tagList("Top Annotations",
+                        .info_tip("Most frequently annotated disease terms among the assay's DEGs.")),
+                card(full_screen = TRUE, class = "mt-2",
+                     card_body(plotlyOutput(ns("di_top"), height = "480px")))
+              ),
+              nav_panel(
+                tagList("Annotation Coverage",
+                        .info_tip("Proportion of up/down-regulated DEGs that have annotations in the selected database.")),
+                card(class = "mt-2",
+                     card_body(plotlyOutput(ns("di_coverage"), height = "280px")))
+              ),
+              nav_panel(
+                "Table",
+                card(class = "mt-2",
+                     card_body(
+                       tags$p(class = "text-muted small mb-1",
+                              bsicons::bs_icon("table"),
+                              " Click a row to see up/down-regulated genes for that disease."),
+                       DTOutput(ns("di_tbl")))),
+                uiOutput(ns("di_gene_panel"))
+              )
+            ))
         )
       )
       ) # end nav_menu "Disease & Phenotype"
@@ -484,16 +509,6 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
                            choices = ch, selected = "", server = TRUE)
     })
 
-    # ── Empty state when no assay selected ────────────────────────────────────
-    output$deg_no_selection <- renderUI({
-      assay <- input$deg_assay
-      if (is.null(assay) || !nzchar(assay)) {
-        .empty_state("diagram-3",
-                     "Select an assay to view plots",
-                     "Use the assay picker above to choose an assay.")
-      }
-    })
-
     # ── Assay metadata card ──────────────────────────────────────────────────
     output$deg_meta_above <- renderUI({
       assay <- input$deg_assay
@@ -513,24 +528,18 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
             !is.na(r$Differentation_time_point) &&
             nzchar(as.character(r$Differentation_time_point)))
           bdg(r$Differentation_time_point, "#6f42c1"),
-        if ("Condition_levels" %in% names(r) &&
-            !is.na(r$Condition_levels) && nzchar(as.character(r$Condition_levels)))
-          bdg(r$Condition_levels, "#d63384"),
         if ("Replicate" %in% names(r) && !is.na(r$Replicate))
           bdg(r$Replicate, "#6c757d")
       )
 
-      tagList(
-        div(class = "d-flex flex-wrap gap-2 mb-2",
-            div(class = "border rounded p-2",
-                style = "background:#f8f9fa; flex:1; min-width:180px;",
-                tags$div(class = "small fw-semibold text-break mb-1",
-                         style = "font-size:0.68rem; word-break:break-all; color:#495057;", assay),
-                tags$div(bdg(r$Gene, "#198754"), bdg(r$Model_system, "#0d6efd"),
-                         bdg(r$KO_strat, "#0dcaf0"), bdg(r$DPC, "#e67e22"),
-                         bdg(r$Cell_Line, "#6c757d"), extra))),
-        tags$hr(class = "my-2")
-      )
+      div(class = "d-flex flex-column gap-2",
+          div(class = "border rounded p-2 mb-1",
+              style = "background:#f8f9fa; min-width:180px;",
+              tags$div(class = "small fw-semibold text-break mb-1",
+                       style = "font-size:0.68rem; word-break:break-all; color:#495057;", assay),
+              tags$div(bdg(r$Gene, "#198754"), bdg(r$Model_system, "#0d6efd"),
+                       bdg(r$Comparison, "#0dcaf0"), bdg(r$DPC, "#e67e22"),
+                       bdg(r$Cell_Line, "#6c757d"), bdg(r$Condition_levels, "#d63384"), extra)))
     })
 
     assay_r <- reactive({ input$deg_assay })
@@ -1236,7 +1245,7 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     # =========================================================================
 
     invisible(lapply(
-      c("deg_no_assays", "deg_match_count", "deg_filter_badge", "deg_no_selection", "deg_meta_above",
+      c("deg_no_assays", "deg_match_count", "deg_filter_badge", "deg_meta_above",
         "gs_ro", "gs_gobp", "gs_gomf", "gs_pc", "gs_ph", "gs_hpo", "gs_di",
         "ro_bar", "ro_tbl", "ro_gene_panel",
         "gobp_bar", "gobp_tbl", "gobp_gene_panel",

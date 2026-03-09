@@ -16,6 +16,7 @@
 library(plotly)
 library(DT)
 library(UpSetR)
+library(shinyWidgets)
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -27,11 +28,11 @@ compare_studiesUI <- function(id) {
       card_header(tagList(bsicons::bs_icon("grid-3x3-gap-fill"), " Assay Comparison",
                           .info_tip("Compare differentially expressed genes across multiple assays side-by-side."))),
       card_body(
-        # ── Top filter bar ──────────────────────────────────────────────
+        # ── Top bar: picker + filters (left) | selected assay cards (right) ──
         layout_columns(
           col_widths = c(4, 8),
 
-          # Left: assay picker
+          # Left: assay picker + filter dropdown
           div(
             div(class = "d-flex align-items-center justify-content-between mb-1",
                 div(class = "d-flex align-items-center gap-2",
@@ -47,48 +48,35 @@ compare_studiesUI <- function(id) {
                                           plugins     = list("remove_button"),
                                           maxItems    = NULL),
                            width = "100%"),
-            uiOutput(ns("cmp_no_assays"))
-          ),
-
-          # Right: collapsible filters
-          div(
-            div(class = "d-flex align-items-center gap-2 mb-1",
-                tags$button(
-                  type = "button",
-                  class = "btn btn-outline-secondary btn-sm d-flex align-items-center gap-1",
-                  `data-bs-toggle` = "collapse",
-                  `data-bs-target` = paste0("#", ns("cmp_filter_panel")),
-                  `aria-expanded` = "false",
-                  `aria-controls` = ns("cmp_filter_panel"),
-                  bsicons::bs_icon("funnel", size = "0.75rem"),
-                  "Filters",
-                  uiOutput(ns("cmp_filter_badge"), inline = TRUE)
-                ),
-                actionButton(ns("cmp_clear_filters"),
-                             tagList(bsicons::bs_icon("x-lg", size = "0.6rem"), " Clear"),
-                             class = "btn btn-link btn-sm p-0",
-                             style = "font-size: 0.7rem; text-decoration: none; color: #212529;")
-            ),
-            div(id = ns("cmp_filter_panel"), class = "collapse",
-                div(class = "pt-2",
-                    layout_columns(
-                      col_widths = c(4, 4, 4),
-                      selectInput(ns("cmp_filter_gene"),  "KO Gene",
-                                  choices = NULL, multiple = TRUE, width = "100%"),
-                      selectInput(ns("cmp_filter_model"), "Model System",
-                                  choices = NULL, multiple = TRUE, width = "100%"),
-                      selectInput(ns("cmp_filter_comp"),  "Comparison",
-                                  choices = NULL, multiple = TRUE, width = "100%")
-                    )
+            uiOutput(ns("cmp_no_assays")),
+            div(class = "mt-1",
+                dropdownButton(
+                  tags$h6(class = "fw-semibold mb-3", "Filter assays"),
+                  selectInput(ns("cmp_filter_gene"),  "KO Gene",
+                              choices = NULL, multiple = TRUE, width = "100%"),
+                  selectInput(ns("cmp_filter_model"), "Model System",
+                              choices = NULL, multiple = TRUE, width = "100%"),
+                  selectInput(ns("cmp_filter_comp"),  "Comparison",
+                              choices = NULL, multiple = TRUE, width = "100%"),
+                  actionButton(ns("cmp_clear_filters"), "Clear all filters",
+                               class = "btn btn-outline-secondary btn-sm w-100 mt-1"),
+                  circle = FALSE, status = "default", size = "sm",
+                  icon = tagList(bsicons::bs_icon("funnel", size = "0.75rem"),
+                                 uiOutput(ns("cmp_filter_badge"), inline = TRUE)),
+                  label = "Filters", width = "320px",
+                  inline = TRUE,
+                  inputId = ns("cmp_filter_dropdown")
                 )
             )
-          )
+          ),
+
+          # Right: selected assay metadata cards
+          uiOutput(ns("cmp_meta_above"))
         ),
 
         tags$hr(class = "my-2"),
 
         # ── Results ─────────────────────────────────────────────────────
-        uiOutput(ns("cmp_meta_above")),
         navset_tab(
           nav_panel(tagList("Gene Matrix",
                           .info_tip("Matrix showing DEG direction per gene across selected assays. Sorted by number of assays.")),
@@ -111,10 +99,10 @@ compare_studiesUI <- function(id) {
                                                       "\u2193 Down" = "down",
                                                       "\u2191\u2193 All DEGs" = "all"),
                                          selected = "up", inline = TRUE)),
-                        plotOutput(ns("cmp_upset"), height = "460px"))),
+                        uiOutput(ns("cmp_upset_ui")))),
           nav_panel(tagList("Common DEGs",
                           .info_tip("Genes differentially expressed in the same direction across all selected assays.")),
-                    div(class = "pt-2", uiOutput(ns("cmp_consensus"))))
+                    div(class = "pt-2", uiOutput(ns("cmp_consensus_ui"))))
         )
       ),
       full_screen = TRUE
@@ -223,7 +211,7 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
 
     # ── Metadata header ───────────────────────────────────────────────────────
     output$cmp_meta_above <- renderUI({
-      assays <- input$cmp_assays; req(assays, length(assays) >= 2)
+      assays <- input$cmp_assays; req(assays, length(assays) >= 1)
       si <- study_info_r()
 
       bdg <- function(val, bg_col) {
@@ -240,21 +228,18 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
               !is.na(r$Differentation_time_point) &&
               nzchar(as.character(r$Differentation_time_point)))
             bdg(r$Differentation_time_point, "#6f42c1"),
-          if ("Condition_levels" %in% names(r) &&
-              !is.na(r$Condition_levels) && nzchar(as.character(r$Condition_levels)))
-            bdg(r$Condition_levels, "#d63384"),
           if ("Replicate" %in% names(r) && !is.na(r$Replicate))
             bdg(r$Replicate, "#6c757d")
         )
         div(class = "border rounded p-2 mb-1",
-            style = "background:#f8f9fa; flex:1; min-width:180px;",
+            style = "background:#f8f9fa; min-width:180px;",
             tags$div(class = "small fw-semibold text-break mb-1",
                      style = "font-size:0.68rem; word-break:break-all; color:#495057;", a),
             tags$div(bdg(r$Gene, "#198754"), bdg(r$Model_system, "#0d6efd"),
-                     bdg(r$KO_strat, "#0dcaf0"), bdg(r$DPC, "#e67e22"),
-                     bdg(r$Cell_Line, "#6c757d"), extra))
+                     bdg(r$Comparison, "#0dcaf0"), bdg(r$DPC, "#e67e22"),
+                     bdg(r$Cell_Line, "#6c757d"), bdg(r$Condition_levels, "#d63384"), extra))
       })
-      tagList(div(class = "d-flex flex-wrap gap-2 mb-2", cards), tags$hr(class = "my-2"))
+      div(class = "d-flex flex-column gap-2", cards)
     })
 
     # ── Gene matrix (placeholder / DT switcher) ─────────────────────────────
@@ -313,6 +298,17 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
                         background = DT::styleColorBar(c(0, length(assays)), "#d4e6f1"),
                         backgroundSize = "100% 80%", backgroundRepeat = "no-repeat",
                         backgroundPosition = "center")
+    })
+
+    # ── UpSet plot (placeholder / empty-state switcher) ─────────────────────
+    output$cmp_upset_ui <- renderUI({
+      if (is.null(input$cmp_assays) || length(input$cmp_assays) < 2) {
+        .empty_state("grid-3x3-gap-fill",
+                     "Select 2 or more assays to view UpSet plot",
+                     "Use the filters and assay picker above to get started.")
+      } else {
+        plotOutput(session$ns("cmp_upset"), height = "460px")
+      }
     })
 
     # ── UpSet plot ────────────────────────────────────────────────────────────
@@ -382,6 +378,17 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
            n_assays = length(assays))
     })
 
+    # ── Consensus DEGs (placeholder / empty-state switcher) ─────────────────
+    output$cmp_consensus_ui <- renderUI({
+      if (is.null(input$cmp_assays) || length(input$cmp_assays) < 2) {
+        .empty_state("grid-3x3-gap-fill",
+                     "Select 2 or more assays to view common DEGs",
+                     "Use the filters and assay picker above to get started.")
+      } else {
+        uiOutput(session$ns("cmp_consensus"))
+      }
+    })
+
     # ── Consensus DEGs layout ────────────────────────────────────────────────
     output$cmp_consensus <- renderUI({
       cd <- cmp_consensus_data(); req(cd)
@@ -440,7 +447,7 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
 
     # ── Suspend outputs until tab is active ───────────────────────────────────
     invisible(lapply(
-      c("cmp_no_assays", "cmp_match_count", "cmp_filter_badge", "cmp_meta_above", "cmp_matrix_ui", "cmp_matrix_tbl", "cmp_upset", "cmp_consensus", "cmp_consensus_up_tbl", "cmp_consensus_dn_tbl"),
+      c("cmp_no_assays", "cmp_match_count", "cmp_filter_badge", "cmp_meta_above", "cmp_matrix_ui", "cmp_matrix_tbl", "cmp_upset_ui", "cmp_upset", "cmp_consensus_ui", "cmp_consensus", "cmp_consensus_up_tbl", "cmp_consensus_dn_tbl"),
       function(oid) outputOptions(output, oid, suspendWhenHidden = TRUE)
     ))
 

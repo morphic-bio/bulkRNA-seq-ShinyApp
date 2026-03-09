@@ -11,5 +11,6 @@ install.packages(c(
   "DT",
   "plotly",
   "duckdb",
-  "DBI"
+  "DBI",
+  "shinyWidgets"
 ))
