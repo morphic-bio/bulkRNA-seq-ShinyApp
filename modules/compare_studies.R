@@ -30,18 +30,11 @@ compare_studiesUI <- function(id) {
       card_body(
         # ── Top bar: picker + filters (left) | selected assay cards (right) ──
         layout_columns(
-          col_widths = c(4, 8),
+          col_widths = c(6, 6),
 
-          # Left: assay picker + filter dropdown
+          # Left: assay picker + controls row
           div(
-            div(class = "d-flex align-items-center justify-content-between mb-1",
-                div(class = "d-flex align-items-center gap-2",
-                    tags$span(class = "fw-semibold small", "Select assays"),
-                    actionButton(ns("cmp_clear_assays"),
-                                 tagList(bsicons::bs_icon("x-lg", size = "0.6rem"), " Clear selection"),
-                                 class = "btn btn-link btn-sm p-0",
-                                 style = "font-size: 0.7rem; text-decoration: none; color: #212529;")),
-                uiOutput(ns("cmp_match_count"), inline = TRUE)),
+            tags$span(class = "fw-semibold small mb-1 d-block", "Select assays"),
             selectizeInput(ns("cmp_assays"), NULL,
                            choices = NULL, selected = NULL, multiple = TRUE,
                            options = list(placeholder = "Choose assays\u2026",
@@ -49,7 +42,12 @@ compare_studiesUI <- function(id) {
                                           maxItems    = NULL),
                            width = "100%"),
             uiOutput(ns("cmp_no_assays")),
-            div(class = "mt-1",
+            div(class = "d-flex align-items-center gap-2 mt-1",
+                actionButton(ns("cmp_clear_assays"),
+                             tagList(bsicons::bs_icon("x-lg", size = "0.6rem"), " Clear selection"),
+                             class = "btn btn-outline-secondary btn-sm",
+                             style = "font-size: 0.7rem;"),
+                uiOutput(ns("cmp_match_count"), inline = TRUE),
                 dropdownButton(
                   tags$h6(class = "fw-semibold mb-3", "Filter assays"),
                   selectInput(ns("cmp_filter_gene"),  "KO Gene",
@@ -143,10 +141,12 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
     })
 
     observeEvent(filtered_cmp_assays(), {
-      ch   <- filtered_cmp_assays()
-      kept <- intersect(isolate(input$cmp_assays), ch)
+      ch       <- filtered_cmp_assays()
+      selected <- isolate(input$cmp_assays)
+      # Keep currently selected assays even if they don't match filters
+      all_choices <- sort(unique(c(selected, ch)))
       updateSelectizeInput(session, "cmp_assays",
-                           choices = ch, selected = kept, server = TRUE)
+                           choices = all_choices, selected = selected, server = TRUE)
     })
 
     output$cmp_no_assays <- renderUI({
@@ -157,11 +157,12 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
 
     # ── Match count badge ───────────────────────────────────────────────────
     output$cmp_match_count <- renderUI({
-      n <- length(filtered_cmp_assays())
+      n     <- length(filtered_cmp_assays())
+      total <- length(unique(study_info_r()$Assay))
       tags$span(
         class = "badge rounded-pill",
         style = "font-size: 0.7rem; background: #6c757d; color: white;",
-        paste0(n, " assay", if (n != 1) "s")
+        paste0(n, "/", total, " assays")
       )
     })
 
@@ -203,7 +204,7 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       if (is.null(rows)) return(NULL)
       meta_cols <- intersect(c("Assay", "Gene", "Model_system", "KO_strat", "DPC",
                                "Cell_Line", "Differentation_time_point",
-                               "Condition_levels"),
+                               "Condition"),
                              colnames(study_info_r()))
       meta <- study_info_r()[!duplicated(study_info_r()$Assay), meta_cols]
       merge(rows, meta, by.x = "assay", by.y = "Assay", all.x = TRUE)
@@ -214,32 +215,34 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       assays <- input$cmp_assays; req(assays, length(assays) >= 1)
       si <- study_info_r()
 
-      bdg <- function(val, bg_col) {
-        v <- as.character(val)
-        if (is.null(val) || is.na(val) || !nzchar(v)) return(NULL)
-        tags$span(class = "badge me-1", style = paste0("background:", bg_col,
-                  "; color:white; font-size:0.72rem;"), v)
+      info_row <- function(label, val) {
+        if (is.null(val) || is.na(val) || !nzchar(as.character(val))) return(NULL)
+        tags$div(class = "small", style = "font-size:0.75rem;",
+                 tags$span(class = "text-muted", paste0(label, ": ")),
+                 tags$span(class = "fw-semibold", as.character(val)))
       }
 
       cards <- lapply(assays, function(a) {
         r <- si[si$Assay == a, ][1, ]
-        extra <- tagList(
-          if ("Differentation_time_point" %in% names(r) &&
-              !is.na(r$Differentation_time_point) &&
-              nzchar(as.character(r$Differentation_time_point)))
-            bdg(r$Differentation_time_point, "#6f42c1"),
-          if ("Replicate" %in% names(r) && !is.na(r$Replicate))
-            bdg(r$Replicate, "#6c757d")
-        )
-        div(class = "border rounded p-2 mb-1",
-            style = "background:#f8f9fa; min-width:180px;",
+        div(class = "border rounded p-2",
+            style = "background:#f8f9fa; min-width:180px; flex:1;",
             tags$div(class = "small fw-semibold text-break mb-1",
                      style = "font-size:0.68rem; word-break:break-all; color:#495057;", a),
-            tags$div(bdg(r$Gene, "#198754"), bdg(r$Model_system, "#0d6efd"),
-                     bdg(r$Comparison, "#0dcaf0"), bdg(r$DPC, "#e67e22"),
-                     bdg(r$Cell_Line, "#6c757d"), bdg(r$Condition_levels, "#d63384"), extra))
+            info_row("Gene", r$Gene),
+            info_row("Model System", r$Model_system),
+            info_row("Comparison", r$Comparison),
+            info_row("DPC", r$DPC),
+            info_row("Cell Line", r$Cell_Line),
+            info_row("Condition", r$Condition),
+            if ("Differentation_time_point" %in% names(r))
+              info_row("Differentiation", r$Differentation_time_point),
+            if ("Replicate" %in% names(r))
+              info_row("Replicate", r$Replicate))
       })
-      div(class = "d-flex flex-column gap-2", cards)
+      tagList(
+        tags$span(class = "fw-semibold small d-block mb-1", "Selected Assays"),
+        div(class = "d-flex flex-wrap gap-2", cards)
+      )
     })
 
     # ── Gene matrix (placeholder / DT switcher) ─────────────────────────────

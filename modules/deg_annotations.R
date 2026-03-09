@@ -76,24 +76,22 @@ deg_annotationsUI <- function(id) {
     div(
       class = "border-bottom pb-2 mb-0 px-2 pt-2",
       layout_columns(
-        col_widths = c(4, 8),
+        col_widths = c(6, 6),
 
-        # Left: assay picker + filter dropdown
+        # Left: assay picker + controls row
         div(
-          div(class = "d-flex align-items-center justify-content-between mb-1",
-              div(class = "d-flex align-items-center gap-2",
-                  tags$span(class = "fw-semibold small", "Select assay"),
-                  actionButton(ns("deg_clear_assay"),
-                               tagList(bsicons::bs_icon("x-lg", size = "0.6rem"), " Clear selection"),
-                               class = "btn btn-link btn-sm p-0",
-                               style = "font-size: 0.7rem; text-decoration: none; color: #212529;")),
-              uiOutput(ns("deg_match_count"), inline = TRUE)),
+          tags$span(class = "fw-semibold small mb-1 d-block", "Select assay"),
           selectizeInput(ns("deg_assay"), NULL,
                          choices = NULL, selected = NULL, multiple = FALSE,
                          options = list(placeholder = "Choose an assay\u2026"),
                          width = "100%"),
           uiOutput(ns("deg_no_assays")),
-          div(class = "mt-1",
+          div(class = "d-flex align-items-center gap-2 mt-1",
+              actionButton(ns("deg_clear_assay"),
+                           tagList(bsicons::bs_icon("x-lg", size = "0.6rem"), " Clear selection"),
+                           class = "btn btn-outline-secondary btn-sm",
+                           style = "font-size: 0.7rem;"),
+              uiOutput(ns("deg_match_count"), inline = TRUE),
               dropdownButton(
                 tags$h6(class = "fw-semibold mb-3", "Filter assays"),
                 selectInput(ns("deg_filter_gene"),  "KO Gene",
@@ -461,9 +459,11 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     observeEvent(filtered_deg_assays(), {
       ch   <- filtered_deg_assays()
       cur  <- isolate(input$deg_assay)
-      kept <- if (!is.null(cur) && nzchar(cur) && cur %in% ch) cur else ""
+      # Keep currently selected assay even if it doesn't match filters
+      all_choices <- if (!is.null(cur) && nzchar(cur)) sort(unique(c(cur, ch))) else ch
+      kept <- if (!is.null(cur) && nzchar(cur)) cur else ""
       updateSelectizeInput(session, "deg_assay",
-                           choices = ch, selected = kept, server = TRUE)
+                           choices = all_choices, selected = kept, server = TRUE)
     })
 
     output$deg_no_assays <- renderUI({
@@ -474,11 +474,12 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
 
     # ── Match count badge ───────────────────────────────────────────────────
     output$deg_match_count <- renderUI({
-      n <- length(filtered_deg_assays())
+      n     <- length(filtered_deg_assays())
+      total <- length(unique(study_info_r()$Assay))
       tags$span(
         class = "badge rounded-pill",
         style = "font-size: 0.7rem; background: #6c757d; color: white;",
-        paste0(n, " assay", if (n != 1) "s")
+        paste0(n, "/", total, " assays")
       )
     })
 
@@ -516,30 +517,30 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       si <- study_info_r()
       r  <- si[si$Assay == assay, ][1, ]
 
-      bdg <- function(val, bg_col) {
-        v <- as.character(val)
-        if (is.null(val) || is.na(val) || !nzchar(v)) return(NULL)
-        tags$span(class = "badge me-1", style = paste0("background:", bg_col,
-                  "; color:white; font-size:0.72rem;"), v)
+      info_row <- function(label, val) {
+        if (is.null(val) || is.na(val) || !nzchar(as.character(val))) return(NULL)
+        tags$div(class = "small", style = "font-size:0.75rem;",
+                 tags$span(class = "text-muted", paste0(label, ": ")),
+                 tags$span(class = "fw-semibold", as.character(val)))
       }
 
-      extra <- tagList(
-        if ("Differentation_time_point" %in% names(r) &&
-            !is.na(r$Differentation_time_point) &&
-            nzchar(as.character(r$Differentation_time_point)))
-          bdg(r$Differentation_time_point, "#6f42c1"),
-        if ("Replicate" %in% names(r) && !is.na(r$Replicate))
-          bdg(r$Replicate, "#6c757d")
+      tagList(
+        tags$span(class = "fw-semibold small d-block mb-1", "Selected Assay"),
+        div(class = "border rounded p-2",
+            style = "background:#f8f9fa; min-width:180px;",
+            tags$div(class = "small fw-semibold text-break mb-1",
+                     style = "font-size:0.68rem; word-break:break-all; color:#495057;", assay),
+            info_row("Gene", r$Gene),
+            info_row("Model System", r$Model_system),
+            info_row("Comparison", r$Comparison),
+            info_row("DPC", r$DPC),
+            info_row("Cell Line", r$Cell_Line),
+            info_row("Condition", r$Condition_levels),
+            if ("Differentation_time_point" %in% names(r))
+              info_row("Differentiation", r$Differentation_time_point),
+            if ("Replicate" %in% names(r))
+              info_row("Replicate", r$Replicate))
       )
-
-      div(class = "d-flex flex-column gap-2",
-          div(class = "border rounded p-2 mb-1",
-              style = "background:#f8f9fa; min-width:180px;",
-              tags$div(class = "small fw-semibold text-break mb-1",
-                       style = "font-size:0.68rem; word-break:break-all; color:#495057;", assay),
-              tags$div(bdg(r$Gene, "#198754"), bdg(r$Model_system, "#0d6efd"),
-                       bdg(r$Comparison, "#0dcaf0"), bdg(r$DPC, "#e67e22"),
-                       bdg(r$Cell_Line, "#6c757d"), bdg(r$Condition_levels, "#d63384"), extra)))
     })
 
     assay_r <- reactive({ input$deg_assay })

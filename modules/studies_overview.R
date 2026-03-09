@@ -24,76 +24,77 @@ studies_overviewUI <- function(id) {
 
   tagList(
 
-    # ── 1. Studies Overview / Study Breakdown / N Assays per Gene (tabs) ───
+    # ── 1. Studies Overview ──────────────────────────────────────────────
     card(
       card_header(
-        tagList(bsicons::bs_icon("table"), " Studies Overview")
+        tagList(bsicons::bs_icon("table"), " Studies Overview",
+                .info_tip("Browse all MorPhiC assays. Use Filters to narrow results."))
       ),
-      navset_tab(
+      card_body(
+        class = "px-3 pt-3 pb-2",
 
-        # ── Tab: Studies Overview table ──────────────────────────────────
-        nav_panel(
-          tagList("Studies Overview",
-                  .info_tip("Browse all MorPhiC assays grouped by KO gene. Use the gene filter to narrow results.")),
-          div(
-            class = "px-3 pt-3 pb-2",
+        # ── Filter bar ──────────────────────────────────────────────
+        div(
+          class = "d-flex align-items-center gap-2 mb-3 pb-3",
+          style = "border-bottom: 1px solid #e9ecef;",
 
-            # ── Filter bar ──────────────────────────────────────────────
+          # Filters dropdown
+          shinyWidgets::dropdownButton(
+            inputId = ns("tbl_filters"),
+            label   = "Filters",
+            icon    = tagList(bsicons::bs_icon("funnel", size = "0.75rem"),
+                              uiOutput(ns("tbl_filter_badge"), inline = TRUE)),
+            circle  = FALSE, status = "default", size = "sm",
+            width   = "520px", inline = TRUE,
+
+            # Clear button
+            actionButton(ns("tbl_clear_filters"), "Clear all filters",
+                         class = "btn btn-outline-secondary btn-sm w-100 mb-2"),
+
+            # Two-column grid
             div(
-              class = "d-flex align-items-end gap-3 mb-3 pb-3",
-              style = "border-bottom: 1px solid #e9ecef;",
+              style = "display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px;",
+              selectizeInput(ns("tbl_filter_gene"), "KO Gene",
+                             choices = NULL, multiple = TRUE, width = "100%",
+                             options = list(placeholder = "All", plugins = list("remove_button"))),
+              selectizeInput(ns("tbl_filter_study"), "Study Title",
+                             choices = NULL, multiple = TRUE, width = "100%",
+                             options = list(placeholder = "All", plugins = list("remove_button"))),
+              selectizeInput(ns("tbl_filter_comparison"), "Comparison",
+                             choices = NULL, multiple = TRUE, width = "100%",
+                             options = list(placeholder = "All", plugins = list("remove_button"))),
+              selectizeInput(ns("tbl_filter_model"), "Model System",
+                             choices = NULL, multiple = TRUE, width = "100%",
+                             options = list(placeholder = "All", plugins = list("remove_button"))),
+              selectizeInput(ns("tbl_filter_cell_line"), "Cell Line",
+                             choices = NULL, multiple = TRUE, width = "100%",
+                             options = list(placeholder = "All", plugins = list("remove_button"))),
+              selectizeInput(ns("tbl_filter_dpc"), "DPC",
+                             choices = NULL, multiple = TRUE, width = "100%",
+                             options = list(placeholder = "All", plugins = list("remove_button"))),
+              selectizeInput(ns("tbl_filter_diff"), "Diff. Time Point",
+                             choices = NULL, multiple = TRUE, width = "100%",
+                             options = list(placeholder = "All", plugins = list("remove_button"))),
+              selectizeInput(ns("tbl_filter_condition"), "Condition Details",
+                             choices = NULL, multiple = TRUE, width = "100%",
+                             options = list(placeholder = "All", plugins = list("remove_button")))
+            )
+          ),
 
-              # Gene filter
-              div(
-                style = "flex: 0 0 380px;",
-                tags$label(
-                  class = "form-label small fw-semibold text-secondary mb-1",
-                  style = "letter-spacing: 0.02em;",
-                  bsicons::bs_icon("funnel"), " Filter by KO Gene"
-                ),
-                selectizeInput(ns("tbl_gene_filter"), NULL,
-                               choices = NULL, multiple = TRUE, width = "100%",
-                               options = list(
-                                 placeholder = "Type to search genes\u2026",
-                                 plugins     = list("remove_button")
-                               ))
-              ),
+          # Summary counts
+          uiOutput(ns("tbl_summary"), inline = TRUE),
 
-              # Summary counts
-              uiOutput(ns("tbl_summary"), inline = TRUE)
-            ),
+          # Spacer
+          div(style = "flex: 1;"),
 
-            # ── Table ───────────────────────────────────────────────────
-            DTOutput(ns("assay_tbl"))
-          )
+          # Charts button (opens modal)
+          actionButton(ns("show_charts"),
+                       tagList(bsicons::bs_icon("bar-chart-fill", size = "0.75rem"), " Charts"),
+                       class = "btn btn-outline-secondary btn-sm")
         ),
 
-        # ── Tab: Study Breakdown ─────────────────────────────────────────
-        nav_panel(
-          tagList("Study Breakdown",
-                  .info_tip("Grouped bar chart showing N assays and N unique KO genes by selected attribute.")),
-          div(
-            class = "p-3",
-            div(
-              class = "d-flex align-items-center gap-2 pb-2",
-              tags$label("Group by:", class = "mb-0 small fw-semibold"),
-              selectInput(ns("group_by"), NULL,
-                          choices  = c("Model System" = "Model_system",
-                                       "KO Strategy"  = "KO_strat",
-                                       "Cell Line"    = "Cell_Line",
-                                       "DPC"          = "DPC"),
-                          selected = "Model_system", width = "160px")
-            ),
-            plotlyOutput(ns("breakdown_bar"), height = "420px")
-          )
-        ),
-
-        # ── Tab: N Assays per Gene ───────────────────────────────────────
-        nav_panel(
-          tagList("N Assays per Gene",
-                  .info_tip("Number of assays available per KO gene across all studies.")),
-          div(class = "p-3",
-              plotlyOutput(ns("assays_per_gene"), height = "480px")))
+        # ── Table ───────────────────────────────────────────────────
+        DTOutput(ns("assay_tbl"))
       ),
       full_screen = TRUE
     ),
@@ -211,25 +212,75 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
     # 1. Studies Overview Table (RowGroup by Gene)
     # =========================================================================
 
-    # Populate gene filter choices
+    # Populate filter choices
     observe({
       si <- study_info_r()
-      genes <- sort(unique(na.omit(si$Gene)))
-      updateSelectizeInput(session, "tbl_gene_filter",
-                           choices = genes, selected = character(0))
+      .upd <- function(id, col) {
+        ch <- sort(unique(na.omit(si[[col]])))
+        updateSelectizeInput(session, id, choices = ch, selected = character(0))
+      }
+      .upd("tbl_filter_gene",       "Gene")
+      .upd("tbl_filter_study",      "Study_title")
+      .upd("tbl_filter_comparison", "Comparison")
+      .upd("tbl_filter_model",      "Model_system")
+      .upd("tbl_filter_cell_line",  "Cell_Line")
+      .upd("tbl_filter_dpc",        "DPC")
+      .upd("tbl_filter_diff",       "Differentation_time_point")
+      .upd("tbl_filter_condition",  "Condition_details")
+    })
+
+    # ── Active filter count badge ─────────────────────────────────────────────
+    output$tbl_filter_badge <- renderUI({
+      n <- sum(
+        length(input$tbl_filter_gene)       > 0,
+        length(input$tbl_filter_study)      > 0,
+        length(input$tbl_filter_comparison) > 0,
+        length(input$tbl_filter_model)      > 0,
+        length(input$tbl_filter_cell_line)  > 0,
+        length(input$tbl_filter_dpc)        > 0,
+        length(input$tbl_filter_diff)       > 0,
+        length(input$tbl_filter_condition)  > 0
+      )
+      if (n > 0) {
+        tags$span(class = "badge rounded-pill bg-primary",
+                  style = "font-size:0.65rem;", n)
+      }
+    })
+
+    # ── Clear all filters ────────────────────────────────────────────────────
+    observeEvent(input$tbl_clear_filters, {
+      updateSelectizeInput(session, "tbl_filter_gene",       selected = character(0))
+      updateSelectizeInput(session, "tbl_filter_study",      selected = character(0))
+      updateSelectizeInput(session, "tbl_filter_comparison", selected = character(0))
+      updateSelectizeInput(session, "tbl_filter_model",      selected = character(0))
+      updateSelectizeInput(session, "tbl_filter_cell_line",  selected = character(0))
+      updateSelectizeInput(session, "tbl_filter_dpc",        selected = character(0))
+      updateSelectizeInput(session, "tbl_filter_diff",       selected = character(0))
+      updateSelectizeInput(session, "tbl_filter_condition",  selected = character(0))
     })
 
     # Reactive: filtered table data (shared by table + summary)
     tbl_data_r <- reactive({
       si   <- study_info_r()
       want <- c("Gene", "Study_title", "Comparison", "Model_system",
-                "Cell_Line", "Differentation_time_point", "Condition_details")
+                "Cell_Line", "DPC", "Differentation_time_point", "Condition_details")
       cols <- want[want %in% colnames(si)]
       tbl  <- si[!duplicated(si$Assay), cols, drop = FALSE]
 
-      sel_genes <- input$tbl_gene_filter
-      if (length(sel_genes) > 0)
-        tbl <- tbl[tbl$Gene %in% sel_genes, ]
+      # Apply filters
+      .filt <- function(tbl, col, vals) {
+        if (length(vals) > 0 && col %in% colnames(tbl))
+          tbl[tbl[[col]] %in% vals, , drop = FALSE]
+        else tbl
+      }
+      tbl <- .filt(tbl, "Gene",                      input$tbl_filter_gene)
+      tbl <- .filt(tbl, "Study_title",               input$tbl_filter_study)
+      tbl <- .filt(tbl, "Comparison",                input$tbl_filter_comparison)
+      tbl <- .filt(tbl, "Model_system",              input$tbl_filter_model)
+      tbl <- .filt(tbl, "Cell_Line",                 input$tbl_filter_cell_line)
+      tbl <- .filt(tbl, "DPC",                       input$tbl_filter_dpc)
+      tbl <- .filt(tbl, "Differentation_time_point", input$tbl_filter_diff)
+      tbl <- .filt(tbl, "Condition_details",         input$tbl_filter_condition)
 
       tbl[order(tbl$Gene, tbl$Model_system), ]
     })
@@ -238,6 +289,7 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
     output$tbl_summary <- renderUI({
       tbl <- tbl_data_r()
       n_genes  <- length(unique(na.omit(tbl$Gene)))
+      n_models <- length(unique(na.omit(tbl$Model_system)))
       n_assays <- nrow(tbl)
       div(
         class = "d-flex gap-2 align-items-center mb-2",
@@ -246,6 +298,11 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
           class = "badge rounded-pill",
           style = "background: #4E79A7; font-size: 0.78rem; font-weight: 500; padding: 6px 12px;",
           paste(n_genes, "genes")
+        ),
+        tags$span(
+          class = "badge rounded-pill",
+          style = "background: #59A14F; font-size: 0.78rem; font-weight: 500; padding: 6px 12px;",
+          paste(n_models, "model systems")
         ),
         tags$span(
           class = "badge rounded-pill",
@@ -262,7 +319,7 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
 
       pretty <- c(Gene = "KO Gene", Study_title = "Study Title",
                   Comparison = "Comparison", Model_system = "Model System",
-                  Cell_Line = "Cell Line",
+                  Cell_Line = "Cell Line", DPC = "DPC",
                   Differentation_time_point = "Diff. Time Point",
                   Condition_details = "Condition Details")
       colnames(tbl) <- pretty[colnames(tbl)]
@@ -368,6 +425,32 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
                yaxis  = list(title = "", automargin = TRUE, tickfont = list(size = 10)),
                margin = list(l = 5, r = 5, t = 10, b = 5)) |>
         config(displayModeBar = FALSE)
+    })
+
+    # ── Charts Modal ──────────────────────────────────────────────────────
+    observeEvent(input$show_charts, {
+      ns <- session$ns
+      showModal(modalDialog(
+        title = "Study Charts",
+        size  = "l",
+        easyClose = TRUE,
+        div(
+          class = "d-flex align-items-center gap-2 pb-2",
+          tags$label("Group by:", class = "mb-0 small fw-semibold"),
+          selectInput(ns("group_by"), NULL,
+                      choices  = c("Model System" = "Model_system",
+                                   "KO Strategy"  = "KO_strat",
+                                   "Cell Line"    = "Cell_Line",
+                                   "DPC"          = "DPC"),
+                      selected = if (!is.null(isolate(input$group_by))) isolate(input$group_by) else "Model_system",
+                      width = "160px")
+        ),
+        plotlyOutput(ns("breakdown_bar"), height = "420px"),
+        tags$hr(),
+        tags$h6(class = "fw-semibold mt-2", "N Assays per Gene"),
+        plotlyOutput(ns("assays_per_gene"), height = "480px"),
+        footer = modalButton("Close")
+      ))
     })
 
     # =========================================================================
@@ -544,7 +627,7 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
 
     # ── Suspend all outputs until visible ─────────────────────────────────────
     invisible(lapply(
-      c("assay_tbl", "tbl_summary", "breakdown_bar", "assays_per_gene",
+      c("assay_tbl", "tbl_summary", "tbl_filter_badge", "breakdown_bar", "assays_per_gene",
         "ko_bar_reactome",     "ko_tbl_reactome",
         "ko_bar_go_bp",        "ko_tbl_go_bp",
         "ko_bar_go_mf",        "ko_tbl_go_mf",
