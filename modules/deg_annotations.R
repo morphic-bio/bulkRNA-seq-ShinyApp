@@ -42,21 +42,23 @@ library(shinyWidgets)
 .PB_CLRS     <- c(up = "#E63946", down = "#457B9D")
 .PB_ANN_CLRS <- c("Annotated" = "#6AB187", "No annotation" = "#CBD5D9")
 
-# ── UI helper: left-column control panel for DEG overlap tabs ─────────────────
+# ── UI helper: options dropdown as nav_item for DEG overlap tabs ──────────────
 
-.deg_ctrl <- function(ns, pfx, topn_default = 20L, min_default = 10L) {
-  div(
-    class = "d-flex align-items-end flex-wrap gap-3 mb-2",
-    div(style = "min-width:140px;",
-        selectInput(ns(paste0(pfx, "_dir")), "Direction",
-                    choices  = c("Up & Down" = "updn", "Up only" = "up", "Down only" = "down"),
-                    selected = "updn", width = "100%")),
-    div(style = "min-width:180px; flex:1; max-width:280px;",
-        sliderInput(ns(paste0(pfx, "_topn")), "Top N pathways",
-                    5, 50, topn_default, step = 5, width = "100%")),
-    div(style = "min-width:180px; flex:1; max-width:280px;",
-        sliderInput(ns(paste0(pfx, "_minsize")), "Min category size",
-                    1, 500, min_default, width = "100%"))
+.deg_ctrl_nav <- function(ns, pfx, topn_default = 20L, min_default = 10L) {
+  nav_item(
+    dropdownButton(
+      selectInput(ns(paste0(pfx, "_dir")), "Direction",
+                  choices  = c("Up & Down" = "updn", "Up only" = "up", "Down only" = "down"),
+                  selected = "updn", width = "100%"),
+      sliderInput(ns(paste0(pfx, "_topn")), "Top N pathways",
+                  5, 50, topn_default, step = 5, width = "100%"),
+      sliderInput(ns(paste0(pfx, "_minsize")), "Min category size",
+                  1, 500, min_default, width = "100%"),
+      circle   = FALSE, status = "outline-secondary", size = "sm",
+      icon     = bsicons::bs_icon("gear", size = "0.8rem"),
+      label    = "Options", width = "300px",
+      inputId  = ns(paste0(pfx, "_opts_dd"))
+    )
   )
 }
 
@@ -138,7 +140,6 @@ deg_annotationsUI <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
             uiOutput(ns("gs_ro")),
-            .deg_ctrl(ns, "ro"),
             card(
               navset_tab(
                 nav_panel("Bar Chart",
@@ -148,7 +149,9 @@ deg_annotationsUI <- function(id) {
                               tags$p(class = "text-muted small mb-1",
                                      bsicons::bs_icon("table"),
                                      " Click a row to see genes for that pathway."),
-                              DTOutput(ns("ro_tbl"))))
+                              DTOutput(ns("ro_tbl")))),
+                nav_spacer(),
+                .deg_ctrl_nav(ns, "ro")
               ),
               uiOutput(ns("ro_gene_panel"))
             ))
@@ -168,7 +171,6 @@ deg_annotationsUI <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
             uiOutput(ns("gs_gobp")),
-            .deg_ctrl(ns, "gobp"),
             card(
               navset_tab(
                 nav_panel("Bar Chart",
@@ -178,7 +180,9 @@ deg_annotationsUI <- function(id) {
                               tags$p(class = "text-muted small mb-1",
                                      bsicons::bs_icon("table"),
                                      " Click a row to see genes for that GO term."),
-                              DTOutput(ns("gobp_tbl"))))
+                              DTOutput(ns("gobp_tbl")))),
+                nav_spacer(),
+                .deg_ctrl_nav(ns, "gobp")
               ),
               uiOutput(ns("gobp_gene_panel"))
             ))
@@ -198,7 +202,6 @@ deg_annotationsUI <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
             uiOutput(ns("gs_gomf")),
-            .deg_ctrl(ns, "gomf"),
             card(
               navset_tab(
                 nav_panel("Bar Chart",
@@ -208,7 +211,9 @@ deg_annotationsUI <- function(id) {
                               tags$p(class = "text-muted small mb-1",
                                      bsicons::bs_icon("table"),
                                      " Click a row to see genes for that GO term."),
-                              DTOutput(ns("gomf_tbl"))))
+                              DTOutput(ns("gomf_tbl")))),
+                nav_spacer(),
+                .deg_ctrl_nav(ns, "gomf")
               ),
               uiOutput(ns("gomf_gene_panel"))
             ))
@@ -228,7 +233,6 @@ deg_annotationsUI <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
             uiOutput(ns("gs_pc")),
-            .deg_ctrl(ns, "pc"),
             card(
               navset_tab(
                 nav_panel("Bar Chart",
@@ -238,7 +242,9 @@ deg_annotationsUI <- function(id) {
                               tags$p(class = "text-muted small mb-1",
                                      bsicons::bs_icon("table"),
                                      " Click a row to see genes for that class."),
-                              DTOutput(ns("pc_tbl"))))
+                              DTOutput(ns("pc_tbl")))),
+                nav_spacer(),
+                .deg_ctrl_nav(ns, "pc")
               ),
               uiOutput(ns("pc_gene_panel"))
             ))
@@ -265,24 +271,6 @@ deg_annotationsUI <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
             uiOutput(ns("gs_ph")),
-            div(
-              class = "d-flex align-items-end flex-wrap gap-3 mb-2",
-              div(style = "min-width:180px;",
-                  checkboxGroupInput(ns("ph_zyg"), "IMPC Zygosity",
-                                     choices  = c("Homozygote" = "homozygote",
-                                                  "Heterozygote" = "heterozygote"),
-                                     selected = c("homozygote", "heterozygote"),
-                                     inline = TRUE)),
-              div(style = "min-width:180px; flex:1; max-width:280px;",
-                  sliderInput(ns("ph_topn"), "Top N phenotypes", 5, 50, 20,
-                              step = 5, width = "100%")),
-              div(style = "min-width:200px;",
-                  radioButtons(ns("ph_dir"), "Direction",
-                               choices  = c("Both" = "both",
-                                            "\u2191 Up only" = "up",
-                                            "\u2193 Down only" = "down"),
-                               selected = "both", inline = TRUE))
-            ),
             navset_tab(
               nav_panel(
                 tagList("Top Phenotypes",
@@ -305,6 +293,27 @@ deg_annotationsUI <- function(id) {
                               " Click a row to see up/down-regulated genes for that phenotype."),
                        DTOutput(ns("ph_tbl")))),
                 uiOutput(ns("ph_gene_panel"))
+              ),
+              nav_spacer(),
+              nav_item(
+                dropdownButton(
+                  checkboxGroupInput(ns("ph_zyg"), "IMPC Zygosity",
+                                     choices  = c("Homozygote" = "homozygote",
+                                                  "Heterozygote" = "heterozygote"),
+                                     selected = c("homozygote", "heterozygote"),
+                                     inline = TRUE),
+                  sliderInput(ns("ph_topn"), "Top N phenotypes", 5, 50, 20,
+                              step = 5, width = "100%"),
+                  radioButtons(ns("ph_dir"), "Direction",
+                               choices  = c("Both" = "both",
+                                            "\u2191 Up only" = "up",
+                                            "\u2193 Down only" = "down"),
+                               selected = "both", inline = TRUE),
+                  circle   = FALSE, status = "outline-secondary", size = "sm",
+                  icon     = bsicons::bs_icon("gear", size = "0.8rem"),
+                  label    = "Options", width = "300px",
+                  inputId  = ns("ph_opts_dd")
+                )
               )
             ))
         )
@@ -323,18 +332,6 @@ deg_annotationsUI <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
             uiOutput(ns("gs_hpo")),
-            div(
-              class = "d-flex align-items-end flex-wrap gap-3 mb-2",
-              div(style = "min-width:180px; flex:1; max-width:280px;",
-                  sliderInput(ns("hpo_topn"), "Top N phenotypes", 5, 50, 20,
-                              step = 5, width = "100%")),
-              div(style = "min-width:200px;",
-                  radioButtons(ns("hpo_dir"), "Direction",
-                               choices  = c("Both" = "both",
-                                            "\u2191 Up only" = "up",
-                                            "\u2193 Down only" = "down"),
-                               selected = "both", inline = TRUE))
-            ),
             navset_tab(
               nav_panel(
                 tagList("Top Phenotypes",
@@ -357,6 +354,22 @@ deg_annotationsUI <- function(id) {
                               " Click a row to see up/down-regulated genes for that phenotype."),
                        DTOutput(ns("hpo_tbl")))),
                 uiOutput(ns("hpo_gene_panel"))
+              ),
+              nav_spacer(),
+              nav_item(
+                dropdownButton(
+                  sliderInput(ns("hpo_topn"), "Top N phenotypes", 5, 50, 20,
+                              step = 5, width = "100%"),
+                  radioButtons(ns("hpo_dir"), "Direction",
+                               choices  = c("Both" = "both",
+                                            "\u2191 Up only" = "up",
+                                            "\u2193 Down only" = "down"),
+                               selected = "both", inline = TRUE),
+                  circle   = FALSE, status = "outline-secondary", size = "sm",
+                  icon     = bsicons::bs_icon("gear", size = "0.8rem"),
+                  label    = "Options", width = "300px",
+                  inputId  = ns("hpo_opts_dd")
+                )
               )
             ))
         )
@@ -375,22 +388,6 @@ deg_annotationsUI <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] && input['%s'] !== ''", ns("deg_assay"), ns("deg_assay")),
             uiOutput(ns("gs_di")),
-            div(
-              class = "d-flex align-items-end flex-wrap gap-3 mb-2",
-              div(style = "min-width:180px;",
-                  radioButtons(ns("di_ds"), "Dataset",
-                               choices  = c("OMIM" = "omim", "Orphanet" = "orphanet"),
-                               selected = "omim", inline = TRUE)),
-              div(style = "min-width:180px; flex:1; max-width:280px;",
-                  sliderInput(ns("di_topn"), "Top N shown", 5, 50, 20,
-                              step = 5, width = "100%")),
-              div(style = "min-width:200px;",
-                  radioButtons(ns("di_dir"), "Direction",
-                               choices  = c("Both" = "both",
-                                            "\u2191 Up only" = "up",
-                                            "\u2193 Down only" = "down"),
-                               selected = "both", inline = TRUE))
-            ),
             navset_tab(
               nav_panel(
                 tagList("Top Annotations",
@@ -413,6 +410,25 @@ deg_annotationsUI <- function(id) {
                               " Click a row to see up/down-regulated genes for that disease."),
                        DTOutput(ns("di_tbl")))),
                 uiOutput(ns("di_gene_panel"))
+              ),
+              nav_spacer(),
+              nav_item(
+                dropdownButton(
+                  radioButtons(ns("di_ds"), "Dataset",
+                               choices  = c("OMIM" = "omim", "Orphanet" = "orphanet"),
+                               selected = "omim", inline = TRUE),
+                  sliderInput(ns("di_topn"), "Top N shown", 5, 50, 20,
+                              step = 5, width = "100%"),
+                  radioButtons(ns("di_dir"), "Direction",
+                               choices  = c("Both" = "both",
+                                            "\u2191 Up only" = "up",
+                                            "\u2193 Down only" = "down"),
+                               selected = "both", inline = TRUE),
+                  circle   = FALSE, status = "outline-secondary", size = "sm",
+                  icon     = bsicons::bs_icon("gear", size = "0.8rem"),
+                  label    = "Options", width = "300px",
+                  inputId  = ns("di_opts_dd")
+                )
               )
             ))
         )
@@ -517,11 +533,11 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       si <- study_info_r()
       r  <- si[si$Assay == assay, ][1, ]
 
-      info_row <- function(label, val) {
+      info_row <- function(label, val, pool) {
         if (is.null(val) || is.na(val) || !nzchar(as.character(val))) return(NULL)
-        tags$div(class = "small", style = "font-size:0.75rem;",
-                 tags$span(class = "text-muted", paste0(label, ": ")),
-                 tags$span(class = "fw-semibold", as.character(val)))
+        tags$div(class = "small d-flex align-items-center gap-1", style = "font-size:0.75rem;",
+                 tags$span(class = "text-muted", paste0(label, ":")),
+                 .meta_badge(val, pool))
       }
 
       tagList(
@@ -530,16 +546,17 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
             style = "background:#f8f9fa; min-width:180px;",
             tags$div(class = "small fw-semibold text-break mb-1",
                      style = "font-size:0.68rem; word-break:break-all; color:#495057;", assay),
-            info_row("Gene", r$Gene),
-            info_row("Model System", r$Model_system),
-            info_row("Comparison", r$Comparison),
-            info_row("DPC", r$DPC),
-            info_row("Cell Line", r$Cell_Line),
-            info_row("Condition", r$Condition_levels),
+            info_row("Gene",         r$Gene,            si$Gene),
+            info_row("Model System", r$Model_system,    si$Model_system),
+            info_row("Comparison",   r$Comparison,      si$Comparison),
+            info_row("DPC",          r$DPC,             si$DPC),
+            info_row("Cell Line",    r$Cell_Line,       si$Cell_Line),
+            info_row("Condition",    r$Condition_levels, si$Condition_levels),
             if ("Differentation_time_point" %in% names(r))
-              info_row("Differentiation", r$Differentation_time_point),
+              info_row("Differentiation", r$Differentation_time_point,
+                       si$Differentation_time_point),
             if ("Replicate" %in% names(r))
-              info_row("Replicate", r$Replicate))
+              info_row("Replicate", r$Replicate, si$Replicate))
       )
     })
 

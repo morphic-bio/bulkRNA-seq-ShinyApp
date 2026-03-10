@@ -4,7 +4,7 @@
 #
 # Sections:
 #   5. Assay Comparison — filter + picker, metadata header, tabs:
-#                         Gene Matrix | UpSet | Common DEGs
+#                         Gene Matrix | Overlapping DEGs
 #
 # Requires helpers.R to be sourced first (.HP_CLRS, load_deg_genes,
 #   .LFC_ROW_CB, .fmt_dir_cell).
@@ -82,25 +82,27 @@ compare_studiesUI <- function(id) {
                         div(class = "d-flex align-items-center gap-3 mb-2",
                             tags$label("Direction:", class = "mb-0 small fw-semibold"),
                             radioButtons(ns("cmp_matrix_dir"), NULL,
-                                         choices  = c("\u2191 Up" = "up",
-                                                      "\u2193 Down" = "down",
-                                                      "\u2191\u2193 All DEGs" = "all"),
+                                         choices  = c("\u2191\u2193 All DEGs" = "all",
+                                                      "\u2191 Up" = "up",
+                                                      "\u2193 Down" = "down"),
                                          selected = "all", inline = TRUE)),
                         uiOutput(ns("cmp_matrix_ui")))),
-          nav_panel(tagList("UpSet Plot",
+          nav_panel(tagList("Overlapping DEGs",
                           .info_tip("Intersection plot showing overlap and unique DEG sets across selected assays.")),
                     div(class = "pt-2",
                         div(class = "d-flex align-items-center gap-3 mb-2",
                             tags$label("Direction:", class = "mb-0 small fw-semibold"),
                             radioButtons(ns("cmp_upset_dir"), NULL,
-                                         choices  = c("\u2191 Up" = "up",
-                                                      "\u2193 Down" = "down",
-                                                      "\u2191\u2193 All DEGs" = "all"),
-                                         selected = "up", inline = TRUE)),
-                        uiOutput(ns("cmp_upset_ui")))),
-          nav_panel(tagList("Common DEGs",
-                          .info_tip("Genes differentially expressed in the same direction across all selected assays.")),
-                    div(class = "pt-2", uiOutput(ns("cmp_consensus_ui"))))
+                                         choices  = c("\u2191\u2193 All DEGs" = "all",
+                                                      "\u2191 Up" = "up",
+                                                      "\u2193 Down" = "down"),
+                                         selected = "all", inline = TRUE),
+                            div(class = "ms-auto",
+                                downloadButton(ns("dl_upset_genes"),
+                                               tagList(bsicons::bs_icon("download", size = "0.8rem"),
+                                                       " Download gene lists"),
+                                               class = "btn btn-outline-secondary btn-sm"))),
+                        uiOutput(ns("cmp_upset_ui"))))
         )
       ),
       full_screen = TRUE
@@ -215,11 +217,11 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       assays <- input$cmp_assays; req(assays, length(assays) >= 1)
       si <- study_info_r()
 
-      info_row <- function(label, val) {
+      info_row <- function(label, val, pool) {
         if (is.null(val) || is.na(val) || !nzchar(as.character(val))) return(NULL)
-        tags$div(class = "small", style = "font-size:0.75rem;",
-                 tags$span(class = "text-muted", paste0(label, ": ")),
-                 tags$span(class = "fw-semibold", as.character(val)))
+        tags$div(class = "small d-flex align-items-center gap-1", style = "font-size:0.75rem;",
+                 tags$span(class = "text-muted", paste0(label, ":")),
+                 .meta_badge(val, pool))
       }
 
       cards <- lapply(assays, function(a) {
@@ -228,21 +230,51 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
             style = "background:#f8f9fa; min-width:180px; flex:1;",
             tags$div(class = "small fw-semibold text-break mb-1",
                      style = "font-size:0.68rem; word-break:break-all; color:#495057;", a),
-            info_row("Gene", r$Gene),
-            info_row("Model System", r$Model_system),
-            info_row("Comparison", r$Comparison),
-            info_row("DPC", r$DPC),
-            info_row("Cell Line", r$Cell_Line),
-            info_row("Condition", r$Condition),
+            info_row("Gene",         r$Gene,         si$Gene),
+            info_row("Model System", r$Model_system, si$Model_system),
+            info_row("Comparison",   r$Comparison,   si$Comparison),
+            info_row("DPC",          r$DPC,          si$DPC),
+            info_row("Cell Line",    r$Cell_Line,    si$Cell_Line),
+            info_row("Condition",    r$Condition,    si$Condition),
             if ("Differentation_time_point" %in% names(r))
-              info_row("Differentiation", r$Differentation_time_point),
+              info_row("Differentiation", r$Differentation_time_point,
+                       si$Differentation_time_point),
             if ("Replicate" %in% names(r))
-              info_row("Replicate", r$Replicate))
+              info_row("Replicate", r$Replicate, si$Replicate))
       })
-      tagList(
-        tags$span(class = "fw-semibold small d-block mb-1", "Selected Assays"),
-        div(class = "d-flex flex-wrap gap-2", cards)
-      )
+      cards_div <- div(class = "d-flex flex-wrap gap-2", cards)
+
+      if (length(assays) > 3) {
+        collapse_id <- session$ns("cmp_meta_collapse")
+        tagList(
+          div(class = "d-flex align-items-center gap-2 mb-1",
+              tags$a(class = "fw-semibold small text-decoration-none d-flex align-items-center gap-1",
+                     href = paste0("#", collapse_id),
+                     `data-bs-toggle` = "collapse",
+                     role = "button", `aria-expanded` = "false",
+                     `aria-controls` = collapse_id,
+                     bsicons::bs_icon("chevron-right", size = "0.65rem",
+                                      class = "collapse-chevron"),
+                     paste0("Selected Assays (", length(assays), ")"))),
+          div(id = collapse_id, class = "collapse", cards_div),
+          tags$style(HTML(sprintf(
+            "#%s.collapse.show ~ * .collapse-chevron,
+             #%s.collapsing ~ * .collapse-chevron { /* no-op */ }
+             [aria-expanded='true'] .collapse-chevron {
+               transform: rotate(90deg);
+               transition: transform 0.2s ease;
+             }
+             [aria-expanded='false'] .collapse-chevron {
+               transform: rotate(0deg);
+               transition: transform 0.2s ease;
+             }", collapse_id, collapse_id)))
+        )
+      } else {
+        tagList(
+          tags$span(class = "fw-semibold small d-block mb-1", "Selected Assays"),
+          cards_div
+        )
+      }
     })
 
     # ── Gene matrix (placeholder / DT switcher) ─────────────────────────────
@@ -281,33 +313,28 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
         }, all_syms, is_up, is_dn, SIMPLIFY = TRUE, USE.NAMES = FALSE)
       }
       ko_cols <- names(mat)[-1]
-      mat$N_Assays <- rowSums(mat[, ko_cols, drop = FALSE] != "")
-      mat <- mat[, c("Gene", "N_Assays", ko_cols)]
-      mat <- mat[order(-mat$N_Assays), ]
+      n_assays <- rowSums(mat[, ko_cols, drop = FALSE] != "")
+      mat <- mat[order(-n_assays), ]
       DT::datatable(mat, rownames = FALSE, filter = "top",
                     options = list(pageLength = 25, scrollX = TRUE,
                                    scrollY = "460px", scrollCollapse = TRUE,
                                    dom = "frtip",
-                                   fixedColumns = list(leftColumns = 2),
+                                   fixedColumns = list(leftColumns = 1),
                                    columnDefs = list(
                                      list(className = "dt-center",
-                                          targets = seq_along(ko_cols) + 1),
+                                          targets = seq_along(ko_cols)),
                                      list(width = "90px",
-                                          targets = seq_along(ko_cols) + 1)),
+                                          targets = seq_along(ko_cols))),
                                    rowCallback = .LFC_ROW_CB,
                                    initComplete = .dt_header_js),
-                    class = "compact row-border hover") |>
-        DT::formatStyle("N_Assays",
-                        background = DT::styleColorBar(c(0, length(assays)), "#d4e6f1"),
-                        backgroundSize = "100% 80%", backgroundRepeat = "no-repeat",
-                        backgroundPosition = "center")
+                    class = "compact row-border hover")
     })
 
     # ── UpSet plot (placeholder / empty-state switcher) ─────────────────────
     output$cmp_upset_ui <- renderUI({
       if (is.null(input$cmp_assays) || length(input$cmp_assays) < 2) {
         .empty_state("grid-3x3-gap-fill",
-                     "Select 2 or more assays to view UpSet plot",
+                     "Select 2 or more assays to view overlapping DEGs",
                      "Use the filters and assay picker above to get started.")
       } else {
         plotOutput(session$ns("cmp_upset"), height = "460px")
@@ -344,113 +371,71 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       clr <- switch(dir, up = .HP_CLRS$up, down = .HP_CLRS$down, all = .HP_CLRS$all)
       UpSetR::upset(mat, sets = rev(names(mat)), order.by = "freq",
                     main.bar.color = clr, sets.bar.color = clr,
-                    text.scale = c(1.2, 1, 1, 1, 1, 0.9),
+                    text.scale = c(2.5, 1.8, 1.5, 2.0, 1.8, 2.0),
                     keep.order = TRUE, mb.ratio = c(0.60, 0.40))
     })
 
-    # ── Consensus DEGs data ──────────────────────────────────────────────────
-    cmp_consensus_data <- reactive({
-      genes_df <- cmp_genes_data(); req(genes_df)
-      assays   <- input$cmp_assays; req(assays, length(assays) >= 2)
+    # ── Download: UpSet intersection gene lists ────────────────────────────────
+    output$dl_upset_genes <- downloadHandler(
+      filename = function() {
+        dir <- input$cmp_upset_dir
+        paste0("upset_gene_lists_", dir, "_", Sys.Date(), ".csv")
+      },
+      content = function(file) {
+        genes_df <- cmp_genes_data(); req(genes_df)
+        assays   <- input$cmp_assays; req(assays, length(assays) >= 2)
+        dir      <- input$cmp_upset_dir
 
-      up_per <- lapply(assays, function(a)
-        unique(na.omit(genes_df$symbol[genes_df$assay == a & genes_df$DEG == "up"])))
-      dn_per <- lapply(assays, function(a)
-        unique(na.omit(genes_df$symbol[genes_df$assay == a & genes_df$DEG == "down"])))
-      up_all <- sort(Reduce(intersect, up_per))
-      dn_all <- sort(Reduce(intersect, dn_per))
-
-      build_tbl <- function(genes, direction) {
-        if (length(genes) == 0) return(data.frame(Gene = character(0)))
-        sub <- genes_df[genes_df$symbol %in% genes & genes_df$DEG == direction &
-                        genes_df$assay %in% assays, ]
-        df <- data.frame(Gene = genes, stringsAsFactors = FALSE)
-        for (a in assays) {
-          lbl <- if (nchar(a) > 35) paste0("\u2026", substr(a, nchar(a)-34, nchar(a))) else a
-          a_sub <- sub[sub$assay == a, ]
-          if ("log2fc" %in% names(a_sub)) {
-            lfc_map <- setNames(a_sub$log2fc, a_sub$symbol)
-            df[[lbl]] <- round(lfc_map[genes], 2)
-          }
+        # ── Same direction filter as the UpSet plot ──
+        sub <- if (dir == "all") {
+          genes_df[genes_df$assay %in% assays & genes_df$DEG %in% c("up", "down"), ]
+        } else {
+          genes_df[genes_df$assay %in% assays & genes_df$DEG == dir, ]
         }
-        df
+        if (nrow(sub) == 0) {
+          write.csv(data.frame(Message = "No DEGs found"), file, row.names = FALSE)
+          return()
+        }
+
+        # ── Build the same binary membership matrix ──
+        all_syms <- sort(unique(na.omit(sub$symbol)))
+        mat <- as.data.frame(lapply(setNames(assays, assays), function(a) {
+          as.integer(all_syms %in% sub$symbol[sub$assay == a])
+        }))
+        rownames(mat) <- all_syms
+
+        # ── Identify every unique intersection ──
+        pattern <- apply(mat, 1, paste, collapse = "|")
+        groups  <- split(all_syms, pattern)
+
+        # ── Name each intersection by its member assays ──
+        named_groups <- lapply(names(groups), function(p) {
+          bits    <- as.integer(strsplit(p, "\\|")[[1]])
+          members <- assays[bits == 1L]
+          label   <- paste(members, collapse = " \u2229 ")
+          list(label = label, genes = sort(groups[[p]]))
+        })
+
+        # ── Build a wide data.frame (columns = intersections) ──
+        max_len <- max(vapply(named_groups, function(x) length(x$genes), integer(1)))
+        out <- as.data.frame(lapply(named_groups, function(x) {
+          c(x$genes, rep("", max_len - length(x$genes)))
+        }), stringsAsFactors = FALSE, check.names = FALSE)
+        names(out) <- vapply(named_groups, function(x) x$label, character(1))
+
+        # ── Sort columns: largest gene list first ──
+        col_sizes <- colSums(out != "")
+        out <- out[, order(-col_sizes), drop = FALSE]
+
+        write.csv(out, file, row.names = FALSE)
       }
-
-      list(up_tbl = build_tbl(up_all, "up"),
-           dn_tbl = build_tbl(dn_all, "down"),
-           n_assays = length(assays))
-    })
-
-    # ── Consensus DEGs (placeholder / empty-state switcher) ─────────────────
-    output$cmp_consensus_ui <- renderUI({
-      if (is.null(input$cmp_assays) || length(input$cmp_assays) < 2) {
-        .empty_state("grid-3x3-gap-fill",
-                     "Select 2 or more assays to view common DEGs",
-                     "Use the filters and assay picker above to get started.")
-      } else {
-        uiOutput(session$ns("cmp_consensus"))
-      }
-    })
-
-    # ── Consensus DEGs layout ────────────────────────────────────────────────
-    output$cmp_consensus <- renderUI({
-      cd <- cmp_consensus_data(); req(cd)
-      n    <- cd$n_assays
-      n_up <- nrow(cd$up_tbl)
-      n_dn <- nrow(cd$dn_tbl)
-
-      up_count <- tags$span(class = "fw-normal text-muted ms-1",
-                            paste0("(", n_up, " gene", if (n_up != 1) "s", ")"))
-      dn_count <- tags$span(class = "fw-normal text-muted ms-1",
-                            paste0("(", n_dn, " gene", if (n_dn != 1) "s", ")"))
-
-      tagList(
-        tags$p(class = "text-muted small mb-3",
-               paste0("Genes regulated in the same direction across all ",
-                      n, " selected assays.")),
-        layout_columns(
-          col_widths = c(6, 6),
-          div(
-            tags$div(class = "fw-bold mb-2", style = "color: #C0392B;",
-                     "\u2191 Up-regulated in all assays", up_count),
-            if (n_up == 0)
-              tags$p(class = "text-muted small", "No genes shared across all assays.")
-            else
-              DTOutput(session$ns("cmp_consensus_up_tbl"))
-          ),
-          div(
-            tags$div(class = "fw-bold mb-2", style = "color: #2C7BB6;",
-                     "\u2193 Down-regulated in all assays", dn_count),
-            if (n_dn == 0)
-              tags$p(class = "text-muted small", "No genes shared across all assays.")
-            else
-              DTOutput(session$ns("cmp_consensus_dn_tbl"))
-          )
-        )
-      )
-    })
-
-    # ── Consensus Up table ───────────────────────────────────────────────────
-    output$cmp_consensus_up_tbl <- DT::renderDT({
-      cd <- cmp_consensus_data(); req(cd, nrow(cd$up_tbl) > 0)
-      DT::datatable(cd$up_tbl, rownames = FALSE,
-                    options = list(pageLength = 15, scrollX = TRUE,
-                                   dom = "ftip", initComplete = .dt_header_js),
-                    class = "compact row-border hover")
-    })
-
-    # ── Consensus Down table ─────────────────────────────────────────────────
-    output$cmp_consensus_dn_tbl <- DT::renderDT({
-      cd <- cmp_consensus_data(); req(cd, nrow(cd$dn_tbl) > 0)
-      DT::datatable(cd$dn_tbl, rownames = FALSE,
-                    options = list(pageLength = 15, scrollX = TRUE,
-                                   dom = "ftip", initComplete = .dt_header_js),
-                    class = "compact row-border hover")
-    })
+    )
 
     # ── Suspend outputs until tab is active ───────────────────────────────────
     invisible(lapply(
-      c("cmp_no_assays", "cmp_match_count", "cmp_filter_badge", "cmp_meta_above", "cmp_matrix_ui", "cmp_matrix_tbl", "cmp_upset_ui", "cmp_upset", "cmp_consensus_ui", "cmp_consensus", "cmp_consensus_up_tbl", "cmp_consensus_dn_tbl"),
+      c("cmp_no_assays", "cmp_match_count", "cmp_filter_badge",
+        "cmp_meta_above", "cmp_matrix_ui", "cmp_matrix_tbl",
+        "cmp_upset_ui", "cmp_upset"),
       function(oid) outputOptions(output, oid, suspendWhenHidden = TRUE)
     ))
 

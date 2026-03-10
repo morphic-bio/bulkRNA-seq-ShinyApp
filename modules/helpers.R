@@ -56,6 +56,33 @@ library(DT)
 )
 .HP_CLRS <- list(up = "#E63946", down = "#457B9D", all = "#6A4C93")
 
+# ── Metadata badge colour helpers ─────────────────────────────────────────────
+
+.BADGE_PALETTE <- c(
+  "#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F",
+  "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC",
+  "#86BCB6", "#8CD17D", "#D4A6C8", "#D7B5A6", "#A0CBE8"
+)
+
+#' Render a coloured rounded-pill badge for a metadata value.
+#' @param val   Single value to display
+#' @param pool  All values in that category (used to assign a stable colour)
+.meta_badge <- function(val, pool) {
+  if (is.null(val) || is.na(val) || !nzchar(as.character(val))) return(NULL)
+  vals <- sort(unique(na.omit(as.character(pool))))
+  idx  <- match(as.character(val), vals)
+  if (is.na(idx)) idx <- 1L
+  bg   <- .BADGE_PALETTE[((idx - 1L) %% length(.BADGE_PALETTE)) + 1L]
+  rgb_v <- col2rgb(bg)
+  lum   <- (0.299 * rgb_v[1] + 0.587 * rgb_v[2] + 0.114 * rgb_v[3]) / 255
+  tc    <- if (lum > 0.5) "#212529" else "#ffffff"
+  tags$span(
+    class = "badge rounded-pill",
+    style = sprintf("background-color:%s; color:%s; font-size:0.68rem; font-weight:500;", bg, tc),
+    as.character(val)
+  )
+}
+
 # ── Gene chip colour helpers ──────────────────────────────────────────────────
 
 .hp_chip_colour <- function(is_up, lfc_abs) {
