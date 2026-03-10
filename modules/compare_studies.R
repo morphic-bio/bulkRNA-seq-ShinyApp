@@ -79,30 +79,36 @@ compare_studiesUI <- function(id) {
           nav_panel(tagList("Gene Matrix",
                           .info_tip("Matrix showing DEG direction per gene across selected assays. Sorted by number of assays.")),
                     div(class = "pt-2",
-                        div(class = "d-flex align-items-center gap-3 mb-2",
-                            tags$label("Direction:", class = "mb-0 small fw-semibold"),
-                            radioButtons(ns("cmp_matrix_dir"), NULL,
-                                         choices  = c("\u2191\u2193 All DEGs" = "all",
-                                                      "\u2191 Up" = "up",
-                                                      "\u2193 Down" = "down"),
-                                         selected = "all", inline = TRUE)),
                         uiOutput(ns("cmp_matrix_ui")))),
           nav_panel(tagList("Overlapping DEGs",
                           .info_tip("Intersection plot showing overlap and unique DEG sets across selected assays.")),
                     div(class = "pt-2",
-                        div(class = "d-flex align-items-center gap-3 mb-2",
-                            tags$label("Direction:", class = "mb-0 small fw-semibold"),
-                            radioButtons(ns("cmp_upset_dir"), NULL,
-                                         choices  = c("\u2191\u2193 All DEGs" = "all",
-                                                      "\u2191 Up" = "up",
-                                                      "\u2193 Down" = "down"),
-                                         selected = "all", inline = TRUE),
-                            div(class = "ms-auto",
-                                downloadButton(ns("dl_upset_genes"),
-                                               tagList(bsicons::bs_icon("download", size = "0.8rem"),
-                                                       " Download gene lists"),
-                                               class = "btn btn-outline-secondary btn-sm"))),
-                        uiOutput(ns("cmp_upset_ui"))))
+                        div(class = "d-flex justify-content-end mb-2",
+                            downloadButton(ns("dl_upset_genes"),
+                                           tagList(bsicons::bs_icon("download", size = "0.8rem"),
+                                                   " Download gene lists"),
+                                           class = "btn btn-outline-secondary btn-sm")),
+                        uiOutput(ns("cmp_upset_ui")))),
+          nav_spacer(),
+          nav_item(
+            dropdownButton(
+              radioButtons(ns("cmp_dir"), "Direction",
+                           choices  = c("\u2191\u2193 All DEGs" = "all",
+                                        "\u2191 Up" = "up",
+                                        "\u2193 Down" = "down"),
+                           selected = "all", inline = TRUE),
+              numericInput(ns("cmp_lfc_min"), HTML("Min log<sub>2</sub>FC"),
+                           value = NA, step = 0.5, width = "100%"),
+              numericInput(ns("cmp_lfc_max"), HTML("Max log<sub>2</sub>FC"),
+                           value = NA, step = 0.5, width = "100%"),
+              actionButton(ns("cmp_clear_deg_filters"), "Clear filters",
+                           class = "btn btn-outline-secondary btn-sm w-100 mt-2"),
+              circle = FALSE, status = "outline-secondary", size = "sm",
+              icon = bsicons::bs_icon("gear", size = "0.8rem"),
+              label = "Options", width = "300px",
+              inputId = ns("cmp_opts_dd")
+            )
+          )
         )
       ),
       full_screen = TRUE
@@ -195,6 +201,13 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
                            choices = ch, selected = character(0), server = TRUE)
     })
 
+    # ── Clear DEG filters (direction + LFC) ──────────────────────────────────
+    observeEvent(input$cmp_clear_deg_filters, {
+      updateRadioButtons(session, "cmp_dir", selected = "all")
+      updateNumericInput(session, "cmp_lfc_min", value = NA)
+      updateNumericInput(session, "cmp_lfc_max", value = NA)
+    })
+
     # ── DEG gene data (lazy, selected assays only) ────────────────────────────
     cmp_genes_data <- reactive({
       assays <- input$cmp_assays
@@ -210,6 +223,29 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
                              colnames(study_info_r()))
       meta <- study_info_r()[!duplicated(study_info_r()$Assay), meta_cols]
       merge(rows, meta, by.x = "assay", by.y = "Assay", all.x = TRUE)
+    })
+
+    # ── Shared filtered data (direction + LFC) ─────────────────────────────────
+    cmp_sub_data <- reactive({
+      genes_df <- cmp_genes_data(); req(genes_df)
+      assays   <- input$cmp_assays; req(assays, length(assays) >= 2)
+      dir      <- input$cmp_dir
+
+      sub <- genes_df[genes_df$assay %in% assays, ]
+
+      # Direction filter
+      if (dir == "up")   sub <- sub[sub$DEG == "up", ]
+      if (dir == "down") sub <- sub[sub$DEG == "down", ]
+
+      # LFC filter (signed log2FC range)
+      lfc_min <- input$cmp_lfc_min
+      lfc_max <- input$cmp_lfc_max
+      if (!is.null(lfc_min) && !is.na(lfc_min))
+        sub <- sub[!is.na(sub$log2fc) & sub$log2fc >= lfc_min, ]
+      if (!is.null(lfc_max) && !is.na(lfc_max))
+        sub <- sub[!is.na(sub$log2fc) & sub$log2fc <= lfc_max, ]
+
+      sub
     })
 
     # ── Metadata header ───────────────────────────────────────────────────────
@@ -290,12 +326,8 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
 
     # ── Gene matrix ───────────────────────────────────────────────────────────
     output$cmp_matrix_tbl <- DT::renderDT({
-      genes_df <- cmp_genes_data(); req(genes_df)
-      assays   <- input$cmp_assays; req(assays, length(assays) >= 2)
-      dir      <- input$cmp_matrix_dir
-      sub <- genes_df[genes_df$assay %in% assays, ]
-      if (dir == "up")   sub <- sub[sub$DEG == "up",   ]
-      if (dir == "down") sub <- sub[sub$DEG == "down", ]
+      sub    <- cmp_sub_data(); req(sub, nrow(sub) > 0)
+      assays <- input$cmp_assays; req(assays, length(assays) >= 2)
       all_syms <- sort(unique(na.omit(sub$symbol)))
       if (length(all_syms) == 0)
         return(DT::datatable(data.frame(Message = "No DEGs found for selected assays."),
@@ -318,7 +350,7 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
       DT::datatable(mat, rownames = FALSE, filter = "top",
                     options = list(pageLength = 25, scrollX = TRUE,
                                    scrollY = "460px", scrollCollapse = TRUE,
-                                   dom = "frtip",
+                                   dom = "rtip",
                                    fixedColumns = list(leftColumns = 1),
                                    columnDefs = list(
                                      list(className = "dt-center",
@@ -343,14 +375,9 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
 
     # ── UpSet plot ────────────────────────────────────────────────────────────
     output$cmp_upset <- renderPlot({
-      genes_df <- cmp_genes_data(); req(genes_df)
-      assays   <- input$cmp_assays; req(assays, length(assays) >= 2)
-      dir      <- input$cmp_upset_dir
-      sub <- if (dir == "all") {
-        genes_df[genes_df$assay %in% assays & genes_df$DEG %in% c("up", "down"), ]
-      } else {
-        genes_df[genes_df$assay %in% assays & genes_df$DEG == dir, ]
-      }
+      sub    <- cmp_sub_data(); req(sub)
+      assays <- input$cmp_assays; req(assays, length(assays) >= 2)
+      dir    <- input$cmp_dir
       if (nrow(sub) == 0 || length(unique(na.omit(sub$symbol))) == 0) {
         dir_lbl <- switch(dir, up = "up-regulated", down = "down-regulated", all = "")
         plot.new()
@@ -378,21 +405,14 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
     # ── Download: UpSet intersection gene lists ────────────────────────────────
     output$dl_upset_genes <- downloadHandler(
       filename = function() {
-        dir <- input$cmp_upset_dir
+        dir <- input$cmp_dir
         paste0("upset_gene_lists_", dir, "_", Sys.Date(), ".csv")
       },
       content = function(file) {
-        genes_df <- cmp_genes_data(); req(genes_df)
-        assays   <- input$cmp_assays; req(assays, length(assays) >= 2)
-        dir      <- input$cmp_upset_dir
+        sub    <- cmp_sub_data()
+        assays <- input$cmp_assays; req(assays, length(assays) >= 2)
 
-        # ── Same direction filter as the UpSet plot ──
-        sub <- if (dir == "all") {
-          genes_df[genes_df$assay %in% assays & genes_df$DEG %in% c("up", "down"), ]
-        } else {
-          genes_df[genes_df$assay %in% assays & genes_df$DEG == dir, ]
-        }
-        if (nrow(sub) == 0) {
+        if (is.null(sub) || nrow(sub) == 0) {
           write.csv(data.frame(Message = "No DEGs found"), file, row.names = FALSE)
           return()
         }

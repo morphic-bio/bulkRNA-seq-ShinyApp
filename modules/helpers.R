@@ -199,12 +199,15 @@ load_deg_genes <- function(con, assay_names) {
 #' @param con     DBI connection to app DuckDB
 #' @param assay   Assay table name (character)
 #' @param ref_tbl Reference table name (e.g. "ref_reactome")
-#' @param dir     Direction: "updn", "up", or "down"
+#' @param dir     Direction: "all", "up", or "down"
 #' @param topn    Max rows to return
-#' @param minsize Minimum category size
+#' @param maxsize Maximum category size (filter out broad terms)
 #' @return data.frame with: category, n_pathway, n_overlap, pct, genes_up, genes_down
-compute_deg_overlap <- function(con, assay, ref_tbl, dir, topn, minsize) {
+compute_deg_overlap <- function(con, assay, ref_tbl, dir, topn, maxsize,
+                                order_col = "pct") {
   n_col <- paste0("n_", dir)
+  order_expr <- if (identical(order_col, "n_overlap"))
+    sprintf("o.%s DESC", n_col) else "pct DESC"
   sql <- sprintf('
     WITH degs AS (
       SELECT COALESCE(NULLIF(TRIM(hgnc_symbol), \'\'), gene_ID) AS symbol, DEG
@@ -222,7 +225,7 @@ compute_deg_overlap <- function(con, assay, ref_tbl, dir, topn, minsize) {
              STRING_AGG(DISTINCT CASE WHEN d.DEG = \'down\' THEN d.symbol END, \'; \') AS genes_down,
              COUNT(DISTINCT CASE WHEN d.DEG = \'up\'   THEN d.symbol END) AS n_up,
              COUNT(DISTINCT CASE WHEN d.DEG = \'down\' THEN d.symbol END) AS n_down,
-             COUNT(DISTINCT d.symbol) AS n_updn
+             COUNT(DISTINCT d.symbol) AS n_all
       FROM %s r
       INNER JOIN degs d ON r.symbol = d.symbol
       GROUP BY r.category
@@ -235,10 +238,10 @@ compute_deg_overlap <- function(con, assay, ref_tbl, dir, topn, minsize) {
            o.genes_down
     FROM ovlp o
     JOIN cat_sizes cs ON o.category = cs.category
-    WHERE cs.n_pathway >= %d
-    ORDER BY pct DESC
+    WHERE cs.n_pathway <= %d
+    ORDER BY %s
     LIMIT %d',
-    assay, ref_tbl, ref_tbl, n_col, n_col, minsize, topn)
+    assay, ref_tbl, ref_tbl, n_col, n_col, maxsize, order_expr, topn)
   tryCatch(dbGetQuery(con, sql), error = function(e) NULL)
 }
 

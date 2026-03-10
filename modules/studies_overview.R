@@ -108,7 +108,7 @@ studies_overviewUI <- function(id) {
         icon  = bsicons::bs_icon("intersect"),
 
         nav_panel(
-          tagList("Pathway Overlap",
+          tagList("Pathways",
                   .info_tip("Overlap between MorPhiC KO genes and Reactome pathway gene sets.")),
           div(class = "py-3 px-1",
               card(navset_tab(
@@ -151,7 +151,7 @@ studies_overviewUI <- function(id) {
 
       # ── Disease & Phenotype Associations ───────────────────────────────
       nav_menu(
-        title = "Disease & Phenotype",
+        title = "Disease & Phenotypes",
         icon  = bsicons::bs_icon("card-list"),
 
         nav_panel(
