@@ -50,9 +50,6 @@ studies_overviewUI <- function(id) {
             selectizeInput(ns("tbl_filter_gene"), "KO Gene",
                            choices = NULL, multiple = TRUE, width = "100%",
                            options = list(placeholder = "All", plugins = list("remove_button"))),
-            selectizeInput(ns("tbl_filter_study"), "Study Title",
-                           choices = NULL, multiple = TRUE, width = "100%",
-                           options = list(placeholder = "All", plugins = list("remove_button"))),
             selectizeInput(ns("tbl_filter_comparison"), "Comparison",
                            choices = NULL, multiple = TRUE, width = "100%",
                            options = list(placeholder = "All", plugins = list("remove_button"))),
@@ -63,12 +60,6 @@ studies_overviewUI <- function(id) {
                            choices = NULL, multiple = TRUE, width = "100%",
                            options = list(placeholder = "All", plugins = list("remove_button"))),
             selectizeInput(ns("tbl_filter_dpc"), "DPC",
-                           choices = NULL, multiple = TRUE, width = "100%",
-                           options = list(placeholder = "All", plugins = list("remove_button"))),
-            selectizeInput(ns("tbl_filter_diff"), "Diff. Time Point",
-                           choices = NULL, multiple = TRUE, width = "100%",
-                           options = list(placeholder = "All", plugins = list("remove_button"))),
-            selectizeInput(ns("tbl_filter_condition"), "Condition Details",
                            choices = NULL, multiple = TRUE, width = "100%",
                            options = list(placeholder = "All", plugins = list("remove_button")))
           )
@@ -219,26 +210,20 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
         updateSelectizeInput(session, id, choices = ch, selected = character(0))
       }
       .upd("tbl_filter_gene",       "Gene")
-      .upd("tbl_filter_study",      "Study_title")
       .upd("tbl_filter_comparison", "Comparison")
       .upd("tbl_filter_model",      "Model_system")
       .upd("tbl_filter_cell_line",  "Cell_Line")
       .upd("tbl_filter_dpc",        "DPC")
-      .upd("tbl_filter_diff",       "Differentation_time_point")
-      .upd("tbl_filter_condition",  "Condition_details")
     })
 
     # ── Active filter count badge ─────────────────────────────────────────────
     output$tbl_filter_badge <- renderUI({
       n <- sum(
         length(input$tbl_filter_gene)       > 0,
-        length(input$tbl_filter_study)      > 0,
         length(input$tbl_filter_comparison) > 0,
         length(input$tbl_filter_model)      > 0,
         length(input$tbl_filter_cell_line)  > 0,
-        length(input$tbl_filter_dpc)        > 0,
-        length(input$tbl_filter_diff)       > 0,
-        length(input$tbl_filter_condition)  > 0
+        length(input$tbl_filter_dpc)        > 0
       )
       if (n > 0) {
         tags$span(class = "badge rounded-pill bg-primary",
@@ -249,20 +234,16 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
     # ── Clear all filters ────────────────────────────────────────────────────
     observeEvent(input$tbl_clear_filters, {
       updateSelectizeInput(session, "tbl_filter_gene",       selected = character(0))
-      updateSelectizeInput(session, "tbl_filter_study",      selected = character(0))
       updateSelectizeInput(session, "tbl_filter_comparison", selected = character(0))
       updateSelectizeInput(session, "tbl_filter_model",      selected = character(0))
       updateSelectizeInput(session, "tbl_filter_cell_line",  selected = character(0))
       updateSelectizeInput(session, "tbl_filter_dpc",        selected = character(0))
-      updateSelectizeInput(session, "tbl_filter_diff",       selected = character(0))
-      updateSelectizeInput(session, "tbl_filter_condition",  selected = character(0))
     })
 
     # Reactive: filtered table data (shared by table + summary)
     tbl_data_r <- reactive({
       si   <- study_info_r()
-      want <- c("Gene", "Study_title", "Comparison", "Model_system",
-                "Cell_Line", "DPC", "Differentation_time_point", "Condition_details")
+      want <- c("Gene", "Assay", "Comparison", "Model_system", "DPC", "Cell_Line")
       cols <- want[want %in% colnames(si)]
       tbl  <- si[!duplicated(si$Assay), cols, drop = FALSE]
 
@@ -272,14 +253,29 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
           tbl[tbl[[col]] %in% vals, , drop = FALSE]
         else tbl
       }
-      tbl <- .filt(tbl, "Gene",                      input$tbl_filter_gene)
-      tbl <- .filt(tbl, "Study_title",               input$tbl_filter_study)
-      tbl <- .filt(tbl, "Comparison",                input$tbl_filter_comparison)
-      tbl <- .filt(tbl, "Model_system",              input$tbl_filter_model)
-      tbl <- .filt(tbl, "Cell_Line",                 input$tbl_filter_cell_line)
-      tbl <- .filt(tbl, "DPC",                       input$tbl_filter_dpc)
-      tbl <- .filt(tbl, "Differentation_time_point", input$tbl_filter_diff)
-      tbl <- .filt(tbl, "Condition_details",         input$tbl_filter_condition)
+      tbl <- .filt(tbl, "Gene",        input$tbl_filter_gene)
+      tbl <- .filt(tbl, "Comparison",  input$tbl_filter_comparison)
+      tbl <- .filt(tbl, "Model_system",input$tbl_filter_model)
+      tbl <- .filt(tbl, "Cell_Line",   input$tbl_filter_cell_line)
+      tbl <- .filt(tbl, "DPC",         input$tbl_filter_dpc)
+
+      # Count DEGs (up / down) per assay from DuckDB
+      con <- con_r()
+      deg_counts <- do.call(rbind, lapply(tbl$Assay, function(a) {
+        tryCatch({
+          df <- dbGetQuery(con, sprintf(
+            "SELECT DEG, COUNT(*) AS n FROM main.\"%s\" WHERE DEG IN ('up','down') GROUP BY DEG", a))
+          data.frame(Assay = a,
+                     n_up   = sum(df$n[df$DEG == "up"],   na.rm = TRUE),
+                     n_down = sum(df$n[df$DEG == "down"], na.rm = TRUE),
+                     stringsAsFactors = FALSE)
+        }, error = function(e) {
+          data.frame(Assay = a, n_up = 0L, n_down = 0L, stringsAsFactors = FALSE)
+        })
+      }))
+      tbl <- merge(tbl, deg_counts, by = "Assay", all.x = TRUE)
+      tbl$n_up[is.na(tbl$n_up)]     <- 0L
+      tbl$n_down[is.na(tbl$n_down)] <- 0L
 
       tbl[order(tbl$Gene, tbl$Model_system), ]
     })
@@ -313,26 +309,45 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
     output$assay_tbl <- DT::renderDT({
       tbl <- tbl_data_r()
 
+      # Build HTML bar for N DEGs (red = up, blue = down)
+      max_deg <- max(tbl$n_up + tbl$n_down, 1L, na.rm = TRUE)
+      tbl$N_DEGs <- mapply(function(up, dn) {
+        total <- up + dn
+        if (total == 0) return('<span style="color:#adb5bd; font-size:0.82em;">0</span>')
+        w_up <- round(up / max_deg * 120)
+        w_dn <- round(dn / max_deg * 120)
+        sprintf(
+          paste0(
+            '<div style="display:flex; align-items:center; gap:4px;">',
+              '<div style="display:flex; height:14px; border-radius:3px; overflow:hidden;">',
+                '<div style="width:%dpx; background:#E63946;"></div>',
+                '<div style="width:%dpx; background:#457B9D;"></div>',
+              '</div>',
+              '<span style="font-size:0.78em; color:#495057; white-space:nowrap;">',
+                '%s \u2191 %s \u2193',
+              '</span>',
+            '</div>'),
+          w_up, w_dn,
+          formatC(up, big.mark = ","), formatC(dn, big.mark = ","))
+      }, tbl$n_up, tbl$n_down)
+
+      # Select and order display columns
+      tbl <- tbl[, c("Gene", "Comparison", "Model_system", "DPC", "Cell_Line", "N_DEGs"),
+                 drop = FALSE]
+
       gene_idx <- 0L
+      degs_idx <- 5L
 
-      pretty <- c(Gene = "KO Gene", Study_title = "Study Title",
-                  Comparison = "Comparison", Model_system = "Model System",
-                  Cell_Line = "Cell Line", DPC = "DPC",
-                  Differentation_time_point = "Diff. Time Point",
-                  Condition_details = "Condition Details")
+      pretty <- c(Gene = "KO Gene", Comparison = "Comparison",
+                  Model_system = "Model System", DPC = "DPC",
+                  Cell_Line = "Cell Line", N_DEGs = "N DEGs")
       colnames(tbl) <- pretty[colnames(tbl)]
-
-      # Truncate long study titles for display
-      tbl[["Study Title"]] <- ifelse(
-        nchar(tbl[["Study Title"]]) > 80,
-        paste0(substr(tbl[["Study Title"]], 1, 77), "\u2026"),
-        tbl[["Study Title"]]
-      )
 
       DT::datatable(
         tbl,
         rownames   = FALSE,
         selection  = "none",
+        escape     = FALSE,
         extensions = "RowGroup",
         options    = list(
           pageLength     = 750,
@@ -343,21 +358,16 @@ studies_overviewServer <- function(id, con_r, study_info_r) {
           columnDefs     = list(
             list(visible = FALSE, targets = gene_idx),
             list(className = "dt-left", targets = "_all"),
-            list(width = "220px", targets = 1),
-            list(width = "130px", targets = 2)
+            list(width = "200px", targets = 1),
+            list(width = "120px", targets = 2),
+            list(width = "80px",  targets = 3),
+            list(width = "130px", targets = 4),
+            list(width = "200px", targets = degs_idx, orderable = TRUE)
           ),
           initComplete = .dt_header_js
         ),
         class = "row-border hover nowrap"
       ) |>
-        DT::formatStyle(
-          "Study Title",
-          fontSize = "0.82em", color = "#495057"
-        ) |>
-        DT::formatStyle(
-          "Condition Details",
-          fontSize = "0.8em", color = "#868e96", fontStyle = "italic"
-        ) |>
         DT::formatStyle(
           "Comparison",
           fontWeight = "500", color = "#343a40"

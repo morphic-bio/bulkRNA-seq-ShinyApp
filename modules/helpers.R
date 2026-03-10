@@ -134,6 +134,30 @@ library(DT)
   "}"
 )
 
+# ── Download dropdown nav_item helper ─────────────────────────────────────────
+
+.dl_dropdown_nav <- function(ns, pfx) {
+  nav_item(
+    dropdownButton(
+      downloadButton(ns(paste0(pfx, "_dl_csv")),
+                     tagList(bsicons::bs_icon("table", size = "0.8rem"),
+                             " Download Table (CSV)"),
+                     class = "btn btn-outline-secondary btn-sm w-100 mb-2"),
+      downloadButton(ns(paste0(pfx, "_dl_png")),
+                     tagList(bsicons::bs_icon("card-list", size = "0.8rem"),
+                             " Download Plot (PNG)"),
+                     class = "btn btn-outline-secondary btn-sm w-100"),
+      circle   = FALSE,
+      status   = "outline-secondary",
+      size     = "sm",
+      icon     = bsicons::bs_icon("download", size = "0.8rem"),
+      label    = "Download",
+      width    = "220px",
+      inputId  = ns(paste0(pfx, "_dl_dd"))
+    )
+  )
+}
+
 # ── Info tooltip helper ─────────────────────────────────────────────────────
 
 .info_tip <- function(text) {

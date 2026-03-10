@@ -16,6 +16,7 @@
 library(plotly)
 library(DT)
 library(UpSetR)
+library(ggplot2)
 library(shinyWidgets)
 
 # ── UI ────────────────────────────────────────────────────────────────────────
@@ -83,13 +84,9 @@ compare_studiesUI <- function(id) {
           nav_panel(tagList("Overlapping DEGs",
                           .info_tip("Intersection plot showing overlap and unique DEG sets across selected assays.")),
                     div(class = "pt-2",
-                        div(class = "d-flex justify-content-end mb-2",
-                            downloadButton(ns("dl_upset_genes"),
-                                           tagList(bsicons::bs_icon("download", size = "0.8rem"),
-                                                   " Download gene lists"),
-                                           class = "btn btn-outline-secondary btn-sm")),
                         uiOutput(ns("cmp_upset_ui")))),
           nav_spacer(),
+          .dl_dropdown_nav(ns, "cmp"),
           nav_item(
             dropdownButton(
               radioButtons(ns("cmp_dir"), "Direction",
@@ -402,52 +399,76 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
                     keep.order = TRUE, mb.ratio = c(0.60, 0.40))
     })
 
-    # ── Download: UpSet intersection gene lists ────────────────────────────────
-    output$dl_upset_genes <- downloadHandler(
+    # ── Download: Table CSV ─────────────────────────────────────────────────────
+    output$cmp_dl_csv <- downloadHandler(
       filename = function() {
-        dir <- input$cmp_dir
-        paste0("upset_gene_lists_", dir, "_", Sys.Date(), ".csv")
+        paste0("gene_matrix_", input$cmp_dir, "_", Sys.Date(), ".csv")
       },
       content = function(file) {
-        sub    <- cmp_sub_data()
-        assays <- input$cmp_assays; req(assays, length(assays) >= 2)
-
-        if (is.null(sub) || nrow(sub) == 0) {
-          write.csv(data.frame(Message = "No DEGs found"), file, row.names = FALSE)
+        sub <- cmp_sub_data(); assays <- input$cmp_assays
+        if (is.null(sub) || nrow(sub) == 0 ||
+            is.null(assays) || length(assays) < 2) {
+          write.csv(data.frame(Message = "No data available"),
+                    file, row.names = FALSE)
           return()
         }
-
-        # ── Build the same binary membership matrix ──
         all_syms <- sort(unique(na.omit(sub$symbol)))
+        mat <- data.frame(Gene = all_syms, stringsAsFactors = FALSE)
+        for (a in assays) {
+          a_sub <- sub[sub$assay == a, ]
+          is_up <- all_syms %in% a_sub$symbol[a_sub$DEG == "up"]
+          is_dn <- all_syms %in% a_sub$symbol[a_sub$DEG == "down"]
+          lfc_v <- if ("log2fc" %in% names(a_sub))
+            setNames(a_sub$log2fc, a_sub$symbol) else setNames(numeric(0), character(0))
+          mat[[a]] <- mapply(function(g, up, dn) {
+            lfc <- lfc_v[g]
+            .fmt_dir_cell(up, dn, if (length(lfc) == 0) NA_real_ else lfc)
+          }, all_syms, is_up, is_dn, SIMPLIFY = TRUE, USE.NAMES = FALSE)
+        }
+        n_assays <- rowSums(mat[, -1, drop = FALSE] != "")
+        mat <- mat[order(-n_assays), ]
+        write.csv(mat, file, row.names = FALSE)
+      }
+    )
+
+    # ── Download: Plot PNG ───────────────────────────────────────────────────────
+    output$cmp_dl_png <- downloadHandler(
+      filename = function() {
+        paste0("upset_plot_", input$cmp_dir, "_", Sys.Date(), ".png")
+      },
+      content = function(file) {
+        sub <- cmp_sub_data(); assays <- input$cmp_assays
+        dir <- input$cmp_dir
+        if (is.null(sub) || nrow(sub) == 0 ||
+            is.null(assays) || length(assays) < 2) {
+          png(file, width = 800, height = 500)
+          plot.new(); text(0.5, 0.5, "No data available",
+                           cex = 1.2, col = "#6c757d")
+          dev.off(); return()
+        }
+        all_syms <- sort(unique(na.omit(sub$symbol)))
+        if (length(all_syms) == 0) {
+          png(file, width = 800, height = 500)
+          plot.new(); text(0.5, 0.5, "No DEGs found",
+                           cex = 1.2, col = "#6c757d")
+          dev.off(); return()
+        }
         mat <- as.data.frame(lapply(setNames(assays, assays), function(a) {
           as.integer(all_syms %in% sub$symbol[sub$assay == a])
         }))
         rownames(mat) <- all_syms
-
-        # ── Identify every unique intersection ──
-        pattern <- apply(mat, 1, paste, collapse = "|")
-        groups  <- split(all_syms, pattern)
-
-        # ── Name each intersection by its member assays ──
-        named_groups <- lapply(names(groups), function(p) {
-          bits    <- as.integer(strsplit(p, "\\|")[[1]])
-          members <- assays[bits == 1L]
-          label   <- paste(members, collapse = " \u2229 ")
-          list(label = label, genes = sort(groups[[p]]))
-        })
-
-        # ── Build a wide data.frame (columns = intersections) ──
-        max_len <- max(vapply(named_groups, function(x) length(x$genes), integer(1)))
-        out <- as.data.frame(lapply(named_groups, function(x) {
-          c(x$genes, rep("", max_len - length(x$genes)))
-        }), stringsAsFactors = FALSE, check.names = FALSE)
-        names(out) <- vapply(named_groups, function(x) x$label, character(1))
-
-        # ── Sort columns: largest gene list first ──
-        col_sizes <- colSums(out != "")
-        out <- out[, order(-col_sizes), drop = FALSE]
-
-        write.csv(out, file, row.names = FALSE)
+        safe <- gsub("[^A-Za-z0-9_]", "_", names(mat))
+        safe <- sub("^([0-9])", "X\\1", safe)
+        safe <- make.unique(safe, sep = "_")
+        names(mat) <- safe
+        clr <- switch(dir,
+          up = .HP_CLRS$up, down = .HP_CLRS$down, all = .HP_CLRS$all)
+        png(file, width = 1200, height = 700, res = 120)
+        print(UpSetR::upset(mat, sets = rev(names(mat)), order.by = "freq",
+                            main.bar.color = clr, sets.bar.color = clr,
+                            text.scale = c(2.5, 1.8, 1.5, 2.0, 1.8, 2.0),
+                            keep.order = TRUE, mb.ratio = c(0.60, 0.40)))
+        dev.off()
       }
     )
 

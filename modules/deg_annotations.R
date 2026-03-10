@@ -17,6 +17,7 @@
 library(plotly)
 library(DT)
 library(dplyr)
+library(ggplot2)
 library(shinyWidgets)
 
 # ── Phenotype annotation constants ────────────────────────────────────────────
@@ -164,6 +165,7 @@ deg_annotationsUI <- function(id) {
                                      " Click a row to see DEGs associated to that pathway."),
                               DTOutput(ns("ro_tbl")))),
                 nav_spacer(),
+                .dl_dropdown_nav(ns, "ro"),
                 .deg_ctrl_nav(ns, "ro")
               ),
               uiOutput(ns("ro_gene_panel"))
@@ -195,6 +197,7 @@ deg_annotationsUI <- function(id) {
                                      " Click a row to see DEGs associated to that GO term."),
                               DTOutput(ns("gobp_tbl")))),
                 nav_spacer(),
+                .dl_dropdown_nav(ns, "gobp"),
                 .deg_ctrl_nav(ns, "gobp")
               ),
               uiOutput(ns("gobp_gene_panel"))
@@ -226,6 +229,7 @@ deg_annotationsUI <- function(id) {
                                      " Click a row to see DEGs associated to that GO term."),
                               DTOutput(ns("gomf_tbl")))),
                 nav_spacer(),
+                .dl_dropdown_nav(ns, "gomf"),
                 .deg_ctrl_nav(ns, "gomf")
               ),
               uiOutput(ns("gomf_gene_panel"))
@@ -257,6 +261,7 @@ deg_annotationsUI <- function(id) {
                                      " Click a row to see DEGs associated to that class."),
                               DTOutput(ns("pc_tbl")))),
                 nav_spacer(),
+                .dl_dropdown_nav(ns, "pc"),
                 .deg_ctrl_nav(ns, "pc")
               ),
               uiOutput(ns("pc_gene_panel"))
@@ -302,6 +307,7 @@ deg_annotationsUI <- function(id) {
                 uiOutput(ns("ph_gene_panel"))
               ),
               nav_spacer(),
+              .dl_dropdown_nav(ns, "ph"),
               nav_item(
                 dropdownButton(
                   radioButtons(ns("ph_dir"), "Direction",
@@ -366,6 +372,7 @@ deg_annotationsUI <- function(id) {
                 uiOutput(ns("hpo_gene_panel"))
               ),
               nav_spacer(),
+              .dl_dropdown_nav(ns, "hpo"),
               nav_item(
                 dropdownButton(
                   radioButtons(ns("hpo_dir"), "Direction",
@@ -425,6 +432,7 @@ deg_annotationsUI <- function(id) {
                 uiOutput(ns("di_gene_panel"))
               ),
               nav_spacer(),
+              .dl_dropdown_nav(ns, "di"),
               nav_item(
                 dropdownButton(
                   radioButtons(ns("di_dir"), "Direction",
@@ -734,6 +742,84 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     }
 
     # =========================================================================
+    # Download handlers: Functional annotation (overlap) tabs
+    # =========================================================================
+
+    # Factory: CSV download for overlap tables
+    .make_overlap_dl_csv <- function(data_r, label) {
+      downloadHandler(
+        filename = function() paste0(label, "_table_", Sys.Date(), ".csv"),
+        content  = function(file) {
+          df <- data_r()
+          if (is.null(df) || nrow(df) == 0) {
+            write.csv(data.frame(Message = "No data available"),
+                      file, row.names = FALSE)
+            return()
+          }
+          out <- df[, c("category", "n_pathway", "n_overlap", "pct",
+                         "genes_up", "genes_down")]
+          names(out) <- c("Category", "Cat_Size", "N_Overlap",
+                          "Pct_Overlap", "Genes_Up", "Genes_Down")
+          write.csv(out, file, row.names = FALSE)
+        }
+      )
+    }
+
+    # Factory: PNG download for overlap bar charts (ggplot2 reconstruction)
+    .make_overlap_dl_png <- function(data_r, dir_pfx, src_label, view_pfx) {
+      downloadHandler(
+        filename = function() {
+          paste0(gsub(" ", "_", tolower(src_label)), "_chart_", Sys.Date(), ".png")
+        },
+        content = function(file) {
+          df <- data_r()
+          if (is.null(df) || nrow(df) == 0) {
+            png(file, width = 800, height = 500)
+            plot.new(); text(0.5, 0.5, "No data available",
+                             cex = 1.2, col = "#6c757d")
+            dev.off(); return()
+          }
+          dir <- input[[dir_pfx]]; if (is.null(dir)) dir <- "all"
+          view_mode <- input[[view_pfx]]; if (is.null(view_mode)) view_mode <- "overlap"
+          dir_clr <- switch(dir,
+            all = .HP_CLRS$all, up = .HP_CLRS$up, down = .HP_CLRS$down, .HP_CLRS$all)
+          if (view_mode == "ngenes") {
+            df$val <- as.integer(df$n_overlap)
+            x_title <- "N DEGs"
+          } else {
+            df$val <- round(df$pct, 1)
+            x_title <- "% DEGs in Category"
+          }
+          df$category <- ifelse(nchar(df$category) > 55,
+                                paste0(substr(df$category, 1, 52), "\u2026"),
+                                df$category)
+          df$category <- factor(df$category, levels = rev(df$category))
+          p <- ggplot2::ggplot(df, ggplot2::aes(x = val, y = category)) +
+            ggplot2::geom_col(fill = dir_clr) +
+            ggplot2::labs(x = x_title, y = NULL, title = src_label) +
+            ggplot2::theme_minimal(base_size = 12) +
+            ggplot2::theme(plot.title = ggplot2::element_text(size = 13))
+          ggplot2::ggsave(file, p, width = 10,
+                          height = max(4, nrow(df) * 0.35),
+                          dpi = 150, bg = "white")
+        }
+      )
+    }
+
+    output$ro_dl_csv   <- .make_overlap_dl_csv(data_ro,   "reactome")
+    output$ro_dl_png   <- .make_overlap_dl_png(data_ro,   "ro_dir",
+                                                "Reactome Pathways", "ro_view")
+    output$gobp_dl_csv <- .make_overlap_dl_csv(data_gobp, "go_bp")
+    output$gobp_dl_png <- .make_overlap_dl_png(data_gobp, "gobp_dir",
+                                                "GO Biological Process", "gobp_view")
+    output$gomf_dl_csv <- .make_overlap_dl_csv(data_gomf, "go_mf")
+    output$gomf_dl_png <- .make_overlap_dl_png(data_gomf, "gomf_dir",
+                                                "GO Molecular Function", "gomf_view")
+    output$pc_dl_csv   <- .make_overlap_dl_csv(data_pc,   "panther_class")
+    output$pc_dl_png   <- .make_overlap_dl_png(data_pc,   "pc_dir",
+                                                "PANTHER Protein Class", "pc_view")
+
+    # =========================================================================
     # Gene chip helpers (used by all tabs with row-click gene panels)
     # =========================================================================
 
@@ -827,7 +913,7 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
               tags$h6(class = "fw-bold mb-1",
                       paste0(row$category[1], " \u2014 ",
                              n_up + n_dn, " DEGs", n_label)),
-              legend,
+              # legend,
               section("\u2191 Up-regulated",   n_up, up_chips, "#C0392B"),
               section("\u2193 Down-regulated", n_dn, dn_chips, "#2C7BB6"))
         )
@@ -1142,6 +1228,85 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     output$ph_tbl  <- .render_pheno_tbl(ph_wide_r,  reactive("impc"))
     output$hpo_tbl <- .render_pheno_tbl(hpo_wide_r, reactive("hpo"))
     output$di_tbl  <- .render_pheno_tbl(di_wide_r,  reactive(input$di_ds))
+
+    # ── Download handlers: Disease & Phenotype tabs ──────────────────────────
+
+    # Factory: CSV download for phenotype wide tables
+    .make_pheno_dl_csv <- function(wide_r, label) {
+      downloadHandler(
+        filename = function() paste0(label, "_table_", Sys.Date(), ".csv"),
+        content  = function(file) {
+          wide <- wide_r()
+          if (is.null(wide) || nrow(wide) == 0) {
+            write.csv(data.frame(Message = "No data available"),
+                      file, row.names = FALSE)
+            return()
+          }
+          write.csv(as.data.frame(wide), file, row.names = FALSE)
+        }
+      )
+    }
+
+    # Factory: PNG download for top phenotype charts (ggplot2 reconstruction)
+    .make_pheno_dl_png <- function(top_r, ds_r, dir_r, label) {
+      downloadHandler(
+        filename = function() paste0(label, "_chart_", Sys.Date(), ".png"),
+        content  = function(file) {
+          td <- top_r()
+          if (is.null(td)) {
+            png(file, width = 800, height = 500)
+            plot.new(); text(0.5, 0.5, "No data available",
+                             cex = 1.2, col = "#6c757d")
+            dev.off(); return()
+          }
+          ds <- ds_r(); dir <- dir_r(); if (is.null(dir)) dir <- "all"
+          summ <- td$summ; labels <- td$top_labels; ph_col <- td$ph_col
+          df <- summ[summ[[ph_col]] %in% labels, ]
+          if (dir != "all") df <- df[df$DEG == dir, ]
+          if (nrow(df) == 0) {
+            png(file, width = 800, height = 500)
+            plot.new(); text(0.5, 0.5, "No data to plot",
+                             cex = 1.2, col = "#6c757d")
+            dev.off(); return()
+          }
+          df$phenotype <- factor(df[[ph_col]], levels = labels)
+          clr_map <- c("up" = .PB_CLRS[["up"]], "down" = .PB_CLRS[["down"]])
+          lbl_map <- c("up" = "\u2191 Up", "down" = "\u2193 Down")
+          if (ds == "impc" && "impc_zygosity" %in% names(df)) {
+            p <- ggplot2::ggplot(df, ggplot2::aes(x = n_genes, y = phenotype,
+                                                   fill = DEG)) +
+              ggplot2::geom_col(position = "stack") +
+              ggplot2::facet_wrap(~impc_zygosity, scales = "free") +
+              ggplot2::scale_fill_manual(values = clr_map, labels = lbl_map) +
+              ggplot2::labs(x = "N DEGs", y = NULL, fill = "Direction") +
+              ggplot2::theme_minimal(base_size = 11)
+          } else {
+            p <- ggplot2::ggplot(df, ggplot2::aes(x = n_genes, y = phenotype,
+                                                   fill = DEG)) +
+              ggplot2::geom_col(position = "stack") +
+              ggplot2::scale_fill_manual(values = clr_map, labels = lbl_map) +
+              ggplot2::labs(x = "N DEGs", y = NULL, fill = "Direction") +
+              ggplot2::theme_minimal(base_size = 11)
+          }
+          h <- max(5, length(labels) * 0.4 + 1)
+          ggplot2::ggsave(file, p, width = 10, height = h,
+                          dpi = 150, bg = "white")
+        }
+      )
+    }
+
+    output$ph_dl_csv  <- .make_pheno_dl_csv(ph_wide_r,  "impc_phenotypes")
+    output$ph_dl_png  <- .make_pheno_dl_png(ph_top_r,   reactive("impc"),
+                                             reactive(input$ph_dir),
+                                             "impc_phenotypes")
+    output$hpo_dl_csv <- .make_pheno_dl_csv(hpo_wide_r, "hpo_phenotypes")
+    output$hpo_dl_png <- .make_pheno_dl_png(hpo_top_r,  reactive("hpo"),
+                                             reactive(input$hpo_dir),
+                                             "hpo_phenotypes")
+    output$di_dl_csv  <- .make_pheno_dl_csv(di_wide_r,  "disease_annotations")
+    output$di_dl_png  <- .make_pheno_dl_png(di_top_r,   reactive(input$di_ds),
+                                             reactive(input$di_dir),
+                                             "disease_annotations")
 
     # ── Phenotype tab gene chip ───────────────────────────────────────────────
 

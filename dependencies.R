@@ -12,5 +12,6 @@ install.packages(c(
   "plotly",
   "duckdb",
   "DBI",
-  "shinyWidgets"
+  "shinyWidgets",
+  "ggplot2"
 ))
