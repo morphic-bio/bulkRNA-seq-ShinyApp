@@ -24,18 +24,11 @@ All data is served from a local **DuckDB** database (`morphic_bulkRNA3.duckdb`) 
 
 ```
 modules/
-  helpers.R                 # Shared constants, colour palettes, utility functions
-  home.R                    # Landing page
-  studies_overview.R        # Perturbed Genes Overview
-  compare_studies.R         # Assay Comparison
-  deg_annotations.R         # Assay Analysis
-  study_info_dashboard.R    # Study coverage charts
-  deg_summary_dashboard.R   # DEG summary across assays
-  assay_browser.R           # Assay metadata browser
-  phenotype_browser.R       # Phenotype/disease database browser
-  overlap_dashboard.R       # Gene-set overlap visualisations
-  overlap_table_dashboard.R # Overlap annotation tables
-  home_page_dashboard.R     # Home page dashboard cards
+  helpers.R          # Shared constants, colour palettes, utility functions
+  home.R             # Landing page
+  studies_overview.R # Perturbed Genes Overview
+  compare_studies.R  # Assay Comparison
+  deg_annotations.R  # Assay Analysis (annotations, phenotypes, diseases)
 ```
 
 ## Requirements
