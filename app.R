@@ -24,7 +24,7 @@ study_info_data <- local({
 
 ui <- page_navbar(
   id       = "main_nav",
-  title    = "MorPhiC Bulk RNA-seq",
+  title    = "MorPhiC Bulk RNA-seq Explorer",
   theme    = bs_theme(bootswatch = "litera", base_font = font_google("Inter")),
   fillable = FALSE,
 
@@ -36,9 +36,9 @@ ui <- page_navbar(
         homeUI("home"))
   ),
 
-  # Page 1 — Perturbed Genes Overview
+  # Page 1 — Assays Overview
   nav_panel(
-    title = tagList(bsicons::bs_icon("bar-chart-fill"), " Perturbed Genes Overview"),
+    title = tagList(bsicons::bs_icon("bar-chart-fill"), " Assays Overview"),
     value = "page1",
     div(class = "container-fluid py-3",
         studies_overviewUI("studies_overview"))

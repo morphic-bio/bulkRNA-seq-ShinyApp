@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: studies_overview
-# Page 1 — Perturbed Genes Overview
+# Page 1 — Assays Overview
 #
 # Sections:
 #   1. Top card: Studies Overview table + Charts modal (4 pie charts)

@@ -1,6 +1,6 @@
 # =============================================================================
 # Module: home
-# Landing page — 3 full-width cards, each with description + live preview.
+# Landing page — 3 clickable cards side-by-side, each with a live preview table.
 # =============================================================================
 
 library(DT)
@@ -8,138 +8,141 @@ library(DT)
 homeUI <- function(id) {
   ns <- NS(id)
 
+  # Shared CSS for clickable cards
+  card_css <- paste0(
+    "cursor:pointer; transition: box-shadow 0.15s, transform 0.15s;",
+    "height:100%;"
+  )
+  card_hover_css <- HTML(
+    "<style>
+      .home-card:hover { box-shadow: 0 .5rem 1rem rgba(0,0,0,.12) !important;
+                         transform: translateY(-2px); }
+      .home-card .card-arrow { transition: transform 0.15s; }
+      .home-card:hover .card-arrow { transform: translateX(4px); }
+    </style>"
+  )
+
   div(
     class = "py-4",
-    style = "max-width: 1140px; margin: 0 auto;",
+    style = "max-width: 1400px; margin: 0 auto;",
+    card_hover_css,
 
     # ── Title ───────────────────────────────────────────────────────────────
     div(
       class = "text-center mb-4",
       h1("MorPhiC Bulk RNA-seq Explorer", class = "fw-bold mb-1"),
-      p(class = "text-muted fs-5 mb-0",
-        "Multi-study differential expression analysis across KO assays")
+      uiOutput(ns("home_chips"), inline = TRUE)
     ),
 
-    # ── Card 1: Perturbed Genes Overview ─────────────────────────────────────
-    card(
-      class = "mb-4 shadow-sm",
-      card_body(
-        layout_columns(
-          col_widths = c(4, 8),
+    # ── Three cards side-by-side ──────────────────────────────────────────
+    layout_columns(
+      col_widths = c(4, 4, 4),
+      fill       = TRUE,
 
-          # Left — description
-          div(
-            class = "d-flex flex-column justify-content-between h-100 pe-3",
-            div(
-              div(class = "d-flex align-items-center gap-2 mb-2",
-                  bsicons::bs_icon("bar-chart-fill", size = "1.4rem"),
-                  tags$h4("Perturbed Genes Overview", class = "mb-0 fw-semibold")),
-              tags$p(class = "text-muted mb-3",
-                     "Browse all MorPhiC assays across KO genes, model systems, and cell lines. ",
-                     "Explore study breakdown statistics, N assays per KO gene, ",
-                     "and pathway overlap for KO genes across Reactome, GO, and PANTHER.")
-            ),
-            actionButton(
-              ns("go_page1"),
-              label = tagList(bsicons::bs_icon("arrow-right-circle"), " Open"),
-              class = "btn btn-primary mt-2",
-              style = "width: fit-content;"
-            )
+      # ── Card 1: Assays Overview ──────────────────────────────────────
+      div(
+        id    = ns("card_page1"),
+        class = "home-card",
+        style = card_css,
+        card(
+          class = "shadow-sm h-100",
+          card_header(
+            class = "d-flex align-items-center gap-2 pb-1",
+            bsicons::bs_icon("bar-chart-fill", size = "1.2rem"),
+            tags$span("Assays Overview", class = "fw-semibold fs-6"),
+            div(style = "flex:1;"),
+            bsicons::bs_icon("arrow-right", size = "1rem", class = "card-arrow text-muted")
           ),
+          card_body(
+            class = "pt-1 pb-2 px-3",
+            tags$p(class = "text-muted small mb-2",
+                   "Browse assays across KO genes, model systems, and cell lines."),
+            div(
+              style = "max-height:280px; overflow:hidden;",
+              DTOutput(ns("preview_p1"), height = "260px")
+            )
+          )
+        )
+      ),
 
-          # Right — actual assay overview table
-          div(
-            class = "border rounded p-2",
-            style = "background:#fafafa; max-height:260px; overflow:hidden;",
-            tags$p(class = "text-muted small mb-1 fw-semibold", "Assay overview"),
-            DTOutput(ns("preview_p1"), height = "210px")
+      # ── Card 2: Assay Comparison ──────────────────────────────────────
+      div(
+        id    = ns("card_page2"),
+        class = "home-card",
+        style = card_css,
+        card(
+          class = "shadow-sm h-100",
+          card_header(
+            class = "d-flex align-items-center gap-2 pb-1",
+            bsicons::bs_icon("grid-3x3-gap-fill", size = "1.2rem"),
+            tags$span("Assay Comparison", class = "fw-semibold fs-6"),
+            div(style = "flex:1;"),
+            bsicons::bs_icon("arrow-right", size = "1rem", class = "card-arrow text-muted")
+          ),
+          card_body(
+            class = "pt-1 pb-2 px-3",
+            tags$p(class = "text-muted small mb-2",
+                   "Compare DEGs across selected assays."),
+            div(
+              style = "max-height:280px; overflow:hidden;",
+              DTOutput(ns("preview_p2"), height = "260px")
+            )
+          )
+        )
+      ),
+
+      # ── Card 3: Assay Analysis ────────────────────────────────────────
+      div(
+        id    = ns("card_page3"),
+        class = "home-card",
+        style = card_css,
+        card(
+          class = "shadow-sm h-100",
+          card_header(
+            class = "d-flex align-items-center gap-2 pb-1",
+            bsicons::bs_icon("diagram-3", size = "1.2rem"),
+            tags$span("Assay Analysis", class = "fw-semibold fs-6"),
+            div(style = "flex:1;"),
+            bsicons::bs_icon("arrow-right", size = "1rem", class = "card-arrow text-muted")
+          ),
+          card_body(
+            class = "pt-1 pb-2 px-3",
+            tags$p(class = "text-muted small mb-2",
+                   "Explore DEG functional/disease/phenotype annotations."),
+            div(
+              style = "max-height:280px; overflow:hidden;",
+              DTOutput(ns("preview_p3"), height = "260px")
+            )
           )
         )
       )
-    ),
-
-    # ── Card 2: Assay Comparison ──────────────────────────────────────────────
-    card(
-      class = "mb-4 shadow-sm",
-      card_body(
-        layout_columns(
-          col_widths = c(4, 8),
-
-          # Left — description
-          div(
-            class = "d-flex flex-column justify-content-between h-100 pe-3",
-            div(
-              div(class = "d-flex align-items-center gap-2 mb-2",
-                  bsicons::bs_icon("grid-3x3-gap-fill", size = "1.4rem"),
-                  tags$h4("Assay Comparison", class = "mb-0 fw-semibold")),
-              tags$p(class = "text-muted mb-3",
-                     "Select assays to compare differentially expressed genes side-by-side. ",
-                     "View a gene-by-assay presence matrix, UpSet plot of overlapping DEG sets, ",
-                     "and a table of genes shared across multiple assays.")
-            ),
-            actionButton(
-              ns("go_page2"),
-              label = tagList(bsicons::bs_icon("arrow-right-circle"), " Open"),
-              class = "btn btn-primary mt-2",
-              style = "width: fit-content;"
-            )
-          ),
-
-          # Right — gene × assay matrix (FEZF2 CE vs KO)
-          div(
-            class = "border rounded p-2",
-            style = "background:#fafafa; max-height:260px; overflow:hidden;",
-            tags$p(class = "text-muted small mb-1 fw-semibold",
-                   "Example: FEZF2 CE vs KO — shared DEGs"),
-            DTOutput(ns("preview_p2"), height = "210px")
-          )
-        )
-      )
-    ),
-
-    # ── Card 3: Assay Analysis ────────────────────────────────────────────────
-    card(
-      class = "mb-4 shadow-sm",
-      card_body(
-        layout_columns(
-          col_widths = c(4, 8),
-
-          # Left — description
-          div(
-            class = "d-flex flex-column justify-content-between h-100 pe-3",
-            div(
-              div(class = "d-flex align-items-center gap-2 mb-2",
-                  bsicons::bs_icon("diagram-3", size = "1.4rem"),
-                  tags$h4("Assay Analysis", class = "mb-0 fw-semibold")),
-              tags$p(class = "text-muted mb-3",
-                     "For any assay, explore DEG overlap with Reactome pathways, GO terms, ",
-                     "and PANTHER protein classes. Cross-reference with IMPC mouse phenotypes, ",
-                     "HPO human phenotypes, OMIM/Orphanet disease associations, and PanelApp gene panels.")
-            ),
-            actionButton(
-              ns("go_page3"),
-              label = tagList(bsicons::bs_icon("arrow-right-circle"), " Open"),
-              class = "btn btn-primary mt-2",
-              style = "width: fit-content;"
-            )
-          ),
-
-          # Right — Reactome pathway overlap table (ISL1 KO example)
-          div(
-            class = "border rounded p-2",
-            style = "background:#fafafa; max-height:260px; overflow:hidden;",
-            tags$p(class = "text-muted small mb-1 fw-semibold",
-                   "Example: ISL1 KO \u2014 Reactome pathway overlap"),
-            DTOutput(ns("preview_p3"), height = "210px")
-          )
-        )
-      )
-    )
+    ) # end layout_columns
   )
 }
 
 homeServer <- function(id, parent_session, con_r, study_info_r) {
   moduleServer(id, function(input, output, session) {
+
+    # ── Make entire cards clickable via JS ──────────────────────────────────
+    observe({
+      ns <- session$ns
+      shinyjs_click <- function(card_id, page_val) {
+        shiny::insertUI(
+          selector  = "body",
+          where     = "beforeEnd",
+          immediate = TRUE,
+          ui = tags$script(HTML(sprintf(
+            "$(document).on('click', '#%s', function() {
+               Shiny.setInputValue('%s', Math.random());
+             });",
+            card_id, ns(page_val)
+          )))
+        )
+      }
+      shinyjs_click(ns("card_page1"), "go_page1")
+      shinyjs_click(ns("card_page2"), "go_page2")
+      shinyjs_click(ns("card_page3"), "go_page3")
+    })
 
     # ── Navigation ────────────────────────────────────────────────────────────
     observeEvent(input$go_page1, {
@@ -152,28 +155,97 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
       nav_select("main_nav", selected = "page3", session = parent_session)
     })
 
-    # ── Preview 1: full assay overview table ──────────────────────────────────
+    # ── Summary chips ──────────────────────────────────────────────────────────
+    output$home_chips <- renderUI({
+      si <- study_info_r()
+      n_studies <- length(unique(na.omit(si$Study_title)))
+      n_assays  <- length(unique(si$Assay))
+      div(
+        class = "d-flex justify-content-center gap-2 mt-2",
+        tags$span(
+          class = "badge rounded-pill",
+          style = "background:#4E79A7; font-size:0.85rem; font-weight:500; padding:6px 14px;",
+          paste(n_studies, "studies")),
+        tags$span(
+          class = "badge rounded-pill",
+          style = "background:#59A14F; font-size:0.85rem; font-weight:500; padding:6px 14px;",
+          paste(n_assays, "assays"))
+      )
+    })
+
+    # ── Preview 1: assay overview (matches current Studies Overview columns) ──
     output$preview_p1 <- DT::renderDT({
       si   <- study_info_r()
-      want <- c("Gene", "Assay", "Model_system", "KO_strat", "DPC")
+      want <- c("Gene", "Assay", "Comparison", "Model_system", "DPC", "Cell_Line")
       cols <- want[want %in% colnames(si)]
       tbl  <- si[!duplicated(si$Assay), cols, drop = FALSE]
       tbl  <- tbl[order(tbl$Gene), ]
-      pretty <- c(Gene = "KO Gene", Assay = "Assay", Model_system = "Model System",
-                  KO_strat = "KO Strategy", DPC = "DPC")
+
+      # Count DEGs per assay
+      con <- con_r()
+      deg_counts <- do.call(rbind, lapply(tbl$Assay, function(a) {
+        tryCatch({
+          df <- dbGetQuery(con, sprintf(
+            "SELECT DEG, COUNT(*) AS n FROM main.\"%s\" WHERE DEG IN ('up','down') GROUP BY DEG", a))
+          data.frame(Assay = a,
+                     n_up   = sum(df$n[df$DEG == "up"],   na.rm = TRUE),
+                     n_down = sum(df$n[df$DEG == "down"], na.rm = TRUE),
+                     stringsAsFactors = FALSE)
+        }, error = function(e) {
+          data.frame(Assay = a, n_up = 0L, n_down = 0L, stringsAsFactors = FALSE)
+        })
+      }))
+      tbl <- merge(tbl, deg_counts, by = "Assay", all.x = TRUE)
+      tbl$n_up[is.na(tbl$n_up)]     <- 0L
+      tbl$n_down[is.na(tbl$n_down)] <- 0L
+
+      # Build HTML bar for N DEGs
+      max_deg <- max(tbl$n_up + tbl$n_down, 1L, na.rm = TRUE)
+      tbl$N_DEGs <- mapply(function(up, dn) {
+        total <- up + dn
+        if (total == 0) return('<span style="color:#adb5bd; font-size:0.82em;">0</span>')
+        w_up <- round(up / max_deg * 80)
+        w_dn <- round(dn / max_deg * 80)
+        sprintf(
+          paste0(
+            '<div style="display:flex; align-items:center; gap:3px;">',
+              '<div style="display:flex; height:12px; border-radius:2px; overflow:hidden;">',
+                '<div style="width:%dpx; background:#E63946;"></div>',
+                '<div style="width:%dpx; background:#457B9D;"></div>',
+              '</div>',
+              '<span style="font-size:0.7em; color:#495057;">',
+                '%s\u2191 %s\u2193',
+              '</span>',
+            '</div>'),
+          w_up, w_dn,
+          formatC(up, big.mark = ","), formatC(dn, big.mark = ","))
+      }, tbl$n_up, tbl$n_down)
+
+      # Select display columns — keep compact to fit card width without scrolling
+      tbl <- tbl[, c("Gene", "Comparison", "Model_system", "N_DEGs"),
+                 drop = FALSE]
+
+      pretty <- c(Gene = "Gene", Comparison = "Comparison",
+                  Model_system = "Model System", N_DEGs = "N DEGs")
       colnames(tbl) <- pretty[colnames(tbl)]
+
       DT::datatable(
         tbl,
         rownames  = FALSE,
         selection = "none",
+        escape    = FALSE,
+        width     = "100%",
         options   = list(
           dom            = "t",
           pageLength     = nrow(tbl),
-          scrollY        = "185px",
+          scrollY        = "230px",
           scrollCollapse = TRUE,
           ordering       = FALSE,
-          columnDefs     = list(list(className = "dt-left", targets = "_all")),
-          initComplete   = .dt_header_js
+          autoWidth      = TRUE,
+          columnDefs     = list(
+            list(className = "dt-left", targets = "_all")
+          ),
+          initComplete = .dt_header_js
         ),
         class = "compact row-border hover"
       )
@@ -220,7 +292,7 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
         options   = list(
           dom            = "t",
           pageLength     = nrow(mat),
-          scrollY        = "185px",
+          scrollY        = "230px",
           scrollCollapse = TRUE,
           ordering       = FALSE,
           columnDefs     = list(
@@ -234,22 +306,22 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
       )
     })
 
-    # ── Preview 3: Reactome pathway overlap — ISL1 KO ─────────────────────────
+    # ── Preview 3: Reactome pathway overlap — ISL1 KO (N DEGs view) ───────────
     output$preview_p3 <- DT::renderDT({
       con   <- con_r()
       assay <- "T2023_12_JAX_RNAseq_ExtraEmbryonic_ExM_day_6_nor_ISL1_KO"
-      df    <- compute_deg_overlap(con, assay, "ref_reactome", "updn", 15L, 1L)
+      df    <- compute_deg_overlap(con, assay, "ref_reactome", "all", 15L, 500L,
+                                   order_col = "n_overlap")
       req(!is.null(df), nrow(df) > 0)
 
       # truncate long pathway names
       df$category <- ifelse(
-        nchar(df$category) > 48,
-        paste0(substr(df$category, 1, 45), "\u2026"),
+        nchar(df$category) > 40,
+        paste0(substr(df$category, 1, 37), "\u2026"),
         df$category
       )
-      df$pct <- round(df$pct, 1)
-      tbl    <- df[, c("category", "n_pathway", "n_overlap", "pct")]
-      names(tbl) <- c("Pathway", "Path. Size", "N DEGs", "% Overlap")
+      tbl    <- df[, c("category", "n_pathway", "n_overlap")]
+      names(tbl) <- c("Pathway", "Size", "N DEGs")
 
       DT::datatable(
         tbl,
@@ -258,20 +330,20 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
         options   = list(
           dom            = "t",
           pageLength     = 15,
-          scrollY        = "185px",
+          scrollY        = "230px",
           scrollCollapse = TRUE,
           ordering       = FALSE,
           columnDefs     = list(
             list(className = "dt-left",   targets = 0),
-            list(className = "dt-center", targets = c(1, 2, 3))
+            list(className = "dt-center", targets = c(1, 2))
           ),
-          initComplete   = .dt_header_js
+          initComplete = .dt_header_js
         ),
         class = "compact row-border hover"
       ) |>
         DT::formatStyle(
-          "% Overlap",
-          background         = DT::styleColorBar(c(0, 100), "#4E79A7"),
+          "N DEGs",
+          background         = DT::styleColorBar(range(tbl[["N DEGs"]], na.rm = TRUE), "#4E79A7"),
           backgroundSize     = "98% 70%",
           backgroundRepeat   = "no-repeat",
           backgroundPosition = "center"
@@ -279,7 +351,7 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
     })
 
     invisible(lapply(
-      c("preview_p1", "preview_p2", "preview_p3"),
+      c("home_chips", "preview_p1", "preview_p2", "preview_p3"),
       function(oid) outputOptions(output, oid, suspendWhenHidden = TRUE)
     ))
   })
