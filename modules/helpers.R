@@ -226,9 +226,29 @@ load_deg_genes <- function(con, assay_names) {
 #' @param dir     Direction: "all", "up", or "down"
 #' @param topn    Max rows to return
 #' @param maxsize Maximum category size (filter out broad terms)
+#' @param min_lfc Minimum absolute log2FC threshold (NULL = no filter)
+#' @param max_lfc Maximum absolute log2FC threshold (NULL = no filter)
 #' @return data.frame with: category, n_pathway, n_overlap, pct, genes_up, genes_down
 compute_deg_overlap <- function(con, assay, ref_tbl, dir, topn, maxsize,
-                                order_col = "pct") {
+                                order_col = "pct",
+                                min_lfc = NULL, max_lfc = NULL) {
+  # Build optional log2FC filter clause
+  lfc_clause <- ""
+  if (!is.null(min_lfc) || !is.null(max_lfc)) {
+    lfc_col <- tryCatch({
+      cols <- dbListFields(con, assay)
+      cols[grepl("log2FoldChange$", cols)][1]
+    }, error = function(e) NA_character_)
+    if (!is.na(lfc_col)) {
+      parts <- character(0)
+      if (!is.null(min_lfc) && is.finite(min_lfc))
+        parts <- c(parts, sprintf('"%s" >= %s', lfc_col, min_lfc))
+      if (!is.null(max_lfc) && is.finite(max_lfc))
+        parts <- c(parts, sprintf('"%s" <= %s', lfc_col, max_lfc))
+      if (length(parts) > 0)
+        lfc_clause <- paste0(" AND ", paste(parts, collapse = " AND "))
+    }
+  }
   n_col <- paste0("n_", dir)
   order_expr <- if (identical(order_col, "n_overlap"))
     sprintf("o.%s DESC", n_col) else "pct DESC"
@@ -236,7 +256,7 @@ compute_deg_overlap <- function(con, assay, ref_tbl, dir, topn, maxsize,
     WITH degs AS (
       SELECT COALESCE(NULLIF(TRIM(hgnc_symbol), \'\'), gene_ID) AS symbol, DEG
       FROM main."%s"
-      WHERE DEG IN (\'up\', \'down\')
+      WHERE DEG IN (\'up\', \'down\')%s
     ),
     cat_sizes AS (
       SELECT category, COUNT(DISTINCT symbol) AS n_pathway
@@ -265,7 +285,7 @@ compute_deg_overlap <- function(con, assay, ref_tbl, dir, topn, maxsize,
     WHERE cs.n_pathway <= %d
     ORDER BY %s
     LIMIT %d',
-    assay, ref_tbl, ref_tbl, n_col, n_col, maxsize, order_expr, topn)
+    assay, lfc_clause, ref_tbl, ref_tbl, n_col, n_col, maxsize, order_expr, topn)
   tryCatch(dbGetQuery(con, sql), error = function(e) NULL)
 }
 

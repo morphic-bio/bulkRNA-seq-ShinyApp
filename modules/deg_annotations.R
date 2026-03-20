@@ -66,6 +66,18 @@ library(shinyWidgets)
                                     "Max genes in a reference term. Lower values show more specific/niche categories; higher values include broader terms.")),
                     1, 500, maxsize_default, width = "100%")
       ),
+      tags$label(class = "fw-semibold small", "log2FC filter",
+                 tooltip(bsicons::bs_icon("info-circle-fill",
+                                          size = "0.75rem",
+                                          class = "text-muted ms-1"),
+                         "Filter DEGs by log2 fold-change range before computing overlaps.")),
+      layout_columns(
+        col_widths = c(6, 6),
+        numericInput(ns(paste0(pfx, "_min_lfc")), "Min log2FC",
+                     value = NA, step = 0.5, width = "100%"),
+        numericInput(ns(paste0(pfx, "_max_lfc")), "Max log2FC",
+                     value = NA, step = 0.5, width = "100%")
+      ),
       actionButton(ns(paste0(pfx, "_clear_opts")), "Clear filters",
                    class = "btn btn-outline-secondary btn-sm w-100 mt-2"),
       circle   = FALSE, status = "outline-secondary", size = "sm",
@@ -81,6 +93,15 @@ library(shinyWidgets)
 deg_annotationsUI <- function(id) {
   ns <- NS(id)
 
+  tagList(
+  # JS handler to set placeholder text on numericInputs
+  tags$script(HTML(sprintf(
+    "Shiny.addCustomMessageHandler('set-lfc-placeholders-%s', function(msg) {
+       msg.ids.forEach(function(id) {
+         var el = document.getElementById(id);
+         if (el) el.setAttribute('placeholder', msg.placeholder[id] || '');
+       });
+     });", id))),
   card(
     card_header(tagList(
       bsicons::bs_icon("diagram-3"), " Assay Analysis",
@@ -329,6 +350,18 @@ deg_annotationsUI <- function(id) {
                                                                class = "text-muted ms-1"),
                                               "Max genes annotated to a term. Lower values show more specific phenotypes; higher values include broader terms.")),
                               1, 500, 500, width = "100%"),
+                  tags$label(class = "fw-semibold small", "log2FC filter",
+                             tooltip(bsicons::bs_icon("info-circle-fill",
+                                                      size = "0.75rem",
+                                                      class = "text-muted ms-1"),
+                                     "Filter DEGs by log2 fold-change range.")),
+                  layout_columns(
+                    col_widths = c(6, 6),
+                    numericInput(ns("ph_min_lfc"), "Min log2FC",
+                                 value = NA, step = 0.5, width = "100%"),
+                    numericInput(ns("ph_max_lfc"), "Max log2FC",
+                                 value = NA, step = 0.5, width = "100%")
+                  ),
                   actionButton(ns("ph_clear_opts"), "Clear filters",
                                class = "btn btn-outline-secondary btn-sm w-100 mt-2"),
                   circle   = FALSE, status = "outline-secondary", size = "sm",
@@ -389,6 +422,18 @@ deg_annotationsUI <- function(id) {
                                                                class = "text-muted ms-1"),
                                               "Max genes annotated to a term. Lower values show more specific phenotypes; higher values include broader terms.")),
                               1, 500, 500, width = "100%"),
+                  tags$label(class = "fw-semibold small", "log2FC filter",
+                             tooltip(bsicons::bs_icon("info-circle-fill",
+                                                      size = "0.75rem",
+                                                      class = "text-muted ms-1"),
+                                     "Filter DEGs by log2 fold-change range.")),
+                  layout_columns(
+                    col_widths = c(6, 6),
+                    numericInput(ns("hpo_min_lfc"), "Min log2FC",
+                                 value = NA, step = 0.5, width = "100%"),
+                    numericInput(ns("hpo_max_lfc"), "Max log2FC",
+                                 value = NA, step = 0.5, width = "100%")
+                  ),
                   actionButton(ns("hpo_clear_opts"), "Clear filters",
                                class = "btn btn-outline-secondary btn-sm w-100 mt-2"),
                   circle   = FALSE, status = "outline-secondary", size = "sm",
@@ -452,6 +497,18 @@ deg_annotationsUI <- function(id) {
                                                                class = "text-muted ms-1"),
                                               "Max genes annotated to a term. Lower values show more specific diseases; higher values include broader terms.")),
                               1, 500, 500, width = "100%"),
+                  tags$label(class = "fw-semibold small", "log2FC filter",
+                             tooltip(bsicons::bs_icon("info-circle-fill",
+                                                      size = "0.75rem",
+                                                      class = "text-muted ms-1"),
+                                     "Filter DEGs by log2 fold-change range.")),
+                  layout_columns(
+                    col_widths = c(6, 6),
+                    numericInput(ns("di_min_lfc"), "Min log2FC",
+                                 value = NA, step = 0.5, width = "100%"),
+                    numericInput(ns("di_max_lfc"), "Max log2FC",
+                                 value = NA, step = 0.5, width = "100%")
+                  ),
                   actionButton(ns("di_clear_opts"), "Clear filters",
                                class = "btn btn-outline-secondary btn-sm w-100 mt-2"),
                   circle   = FALSE, status = "outline-secondary", size = "sm",
@@ -466,6 +523,7 @@ deg_annotationsUI <- function(id) {
       ) # end nav_menu "Disease & Phenotype"
     ) # end navset_tab
   )   # end card
+  )   # end tagList
 }
 
 # ── Server ────────────────────────────────────────────────────────────────────
@@ -570,8 +628,13 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
                  .meta_badge(val, pool))
       }
 
+      ns <- session$ns
       tagList(
-        tags$span(class = "fw-semibold small d-block mb-1", "Selected Assay"),
+        div(class = "d-flex align-items-center justify-content-between mb-1",
+            tags$span(class = "fw-semibold small", "Selected Assay"),
+            actionButton(ns("deg_view_genes"), tagList(bsicons::bs_icon("table", size = "0.7rem"), " View DEGs"),
+                         class = "btn btn-outline-primary btn-sm", style = "font-size:0.7rem; padding:2px 8px;")
+        ),
         div(class = "border rounded p-2",
             style = "background:#f8f9fa; min-width:180px;",
             tags$div(class = "small fw-semibold text-break mb-1",
@@ -588,6 +651,84 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
             if ("Replicate" %in% names(r))
               info_row("Replicate", r$Replicate, si$Replicate))
       )
+    })
+
+    # ── "View DEGs" modal ─────────────────────────────────────────────────────
+    observeEvent(input$deg_view_genes, {
+      ns <- session$ns
+      assay <- input$deg_assay; req(assay, nzchar(assay))
+      showModal(modalDialog(
+        title = tagList("DEGs \u2014 ", tags$span(class = "text-muted fw-normal", assay)),
+        size = "xl", easyClose = TRUE,
+        layout_columns(
+          col_widths = c(6, 6),
+          div(
+            tags$h6(class = "fw-semibold", style = "color:#E63946;",
+                    "\u2191 Up-regulated", uiOutput(ns("deg_modal_n_up"), inline = TRUE)),
+            DTOutput(ns("deg_modal_up"))
+          ),
+          div(
+            tags$h6(class = "fw-semibold", style = "color:#457B9D;",
+                    "\u2193 Down-regulated", uiOutput(ns("deg_modal_n_down"), inline = TRUE)),
+            DTOutput(ns("deg_modal_down"))
+          )
+        ),
+        footer = modalButton("Close")
+      ))
+    })
+
+    deg_modal_data_r <- reactive({
+      assay <- input$deg_assay; req(assay, nzchar(assay))
+      con   <- con_r()
+      lfc_col <- tryCatch({
+        cols <- dbListFields(con, assay)
+        cols[grepl("log2FoldChange$", cols)][1]
+      }, error = function(e) NA_character_)
+      req(!is.na(lfc_col))
+      tryCatch(
+        dbGetQuery(con, sprintf(
+          'SELECT COALESCE(NULLIF(TRIM(hgnc_symbol), \'\'), gene_ID) AS symbol,
+                  DEG, ROUND("%s", 3) AS log2FC
+           FROM main."%s" WHERE DEG IN (\'up\', \'down\')
+           ORDER BY "%s" DESC',
+          lfc_col, assay, lfc_col)),
+        error = function(e) NULL)
+    })
+
+    output$deg_modal_n_up <- renderUI({
+      df <- deg_modal_data_r(); req(!is.null(df))
+      n <- sum(df$DEG == "up")
+      tags$span(class = "badge rounded-pill bg-light text-muted ms-1",
+                style = "font-size:0.75rem;", paste0("(", formatC(n, big.mark = ","), ")"))
+    })
+    output$deg_modal_n_down <- renderUI({
+      df <- deg_modal_data_r(); req(!is.null(df))
+      n <- sum(df$DEG == "down")
+      tags$span(class = "badge rounded-pill bg-light text-muted ms-1",
+                style = "font-size:0.75rem;", paste0("(", formatC(n, big.mark = ","), ")"))
+    })
+
+    output$deg_modal_up <- DT::renderDT({
+      df <- deg_modal_data_r(); req(!is.null(df))
+      up <- df[df$DEG == "up", c("symbol", "log2FC"), drop = FALSE]
+      names(up) <- c("Gene", "log2FC")
+      DT::datatable(up, rownames = FALSE, selection = "none",
+                    options = list(dom = "t", pageLength = nrow(up),
+                                  scrollY = "400px", scrollCollapse = TRUE,
+                                  ordering = FALSE,
+                                  initComplete = .dt_header_js),
+                    class = "compact row-border hover")
+    })
+    output$deg_modal_down <- DT::renderDT({
+      df <- deg_modal_data_r(); req(!is.null(df))
+      dn <- df[df$DEG == "down", c("symbol", "log2FC"), drop = FALSE]
+      names(dn) <- c("Gene", "log2FC")
+      DT::datatable(dn, rownames = FALSE, selection = "none",
+                    options = list(dom = "t", pageLength = nrow(dn),
+                                  scrollY = "400px", scrollCollapse = TRUE,
+                                  ordering = FALSE,
+                                  initComplete = .dt_header_js),
+                    class = "compact row-border hover")
     })
 
     assay_r <- reactive({ input$deg_assay })
@@ -618,16 +759,58 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     })
 
     # =========================================================================
+    # Shared: log2FC range for placeholder text
+    # =========================================================================
+
+    assay_lfc_range_r <- reactive({
+      assay <- assay_r(); req(assay, nzchar(assay))
+      con   <- con_r()
+      lfc_col <- tryCatch({
+        cols <- dbListFields(con, assay)
+        cols[grepl("log2FoldChange$", cols)][1]
+      }, error = function(e) NA_character_)
+      if (is.na(lfc_col)) return(list(min_lfc = NA, max_lfc = NA))
+      tryCatch({
+        df <- dbGetQuery(con, sprintf(
+          'SELECT ROUND(MIN("%s"), 2) AS min_lfc, ROUND(MAX("%s"), 2) AS max_lfc
+           FROM main."%s" WHERE DEG IN (\'up\', \'down\')',
+          lfc_col, lfc_col, assay))
+        list(min_lfc = df$min_lfc[1], max_lfc = df$max_lfc[1])
+      }, error = function(e) list(min_lfc = NA, max_lfc = NA))
+    })
+
+    observe({
+      rng <- assay_lfc_range_r()
+      ns  <- session$ns
+      min_ph <- if (!is.na(rng$min_lfc)) as.character(rng$min_lfc) else ""
+      max_ph <- if (!is.na(rng$max_lfc)) as.character(rng$max_lfc) else ""
+      pfxs <- c("ro", "gobp", "gomf", "pc", "ph", "hpo", "di")
+      ids <- unlist(lapply(pfxs, function(p) c(ns(paste0(p, "_min_lfc")),
+                                                ns(paste0(p, "_max_lfc")))))
+      placeholders <- setNames(
+        rep(c(min_ph, max_ph), length(pfxs)),
+        ids)
+      session$sendCustomMessage(
+        paste0("set-lfc-placeholders-", id),
+        list(ids = ids, placeholder = as.list(placeholders)))
+    })
+
+    # =========================================================================
     # Shared: DEG symbols for phenotype tabs
     # =========================================================================
 
     deg_symbols_r <- reactive({
       assay <- assay_r(); req(assay, nzchar(assay))
       con <- con_r()
+      lfc_col <- tryCatch({
+        cols <- dbListFields(con, assay)
+        cols[grepl("log2FoldChange$", cols)][1]
+      }, error = function(e) NA_character_)
+      lfc_expr <- if (!is.na(lfc_col)) sprintf(', "%s" AS log2fc', lfc_col) else ""
       tryCatch(
         dbGetQuery(con, sprintf(
-          "SELECT COALESCE(NULLIF(TRIM(hgnc_symbol), ''), gene_ID) AS symbol, DEG
-             FROM main.\"%s\" WHERE DEG IN ('up', 'down')", assay)),
+          "SELECT COALESCE(NULLIF(TRIM(hgnc_symbol), ''), gene_ID) AS symbol, DEG%s
+             FROM main.\"%s\" WHERE DEG IN ('up', 'down')", lfc_expr, assay)),
         error = function(e) NULL)
     })
 
@@ -636,7 +819,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     # =========================================================================
 
     # Build a reactive that computes DEG overlap on-the-fly via ref tables.
-    .make_overlap_data <- function(src, dir_pfx, topn_pfx, maxsize_pfx, view_pfx) {
+    .make_overlap_data <- function(src, dir_pfx, topn_pfx, maxsize_pfx, view_pfx,
+                                    min_lfc_pfx, max_lfc_pfx) {
       ref_tbl <- .HP_REF_TBL[[src]]
       reactive({
         assay   <- assay_r();            req(assay, nzchar(assay))
@@ -644,21 +828,26 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
         topn    <- input[[topn_pfx]];    req(topn)
         maxsize <- input[[maxsize_pfx]]; req(maxsize)
         view    <- input[[view_pfx]];    if (is.null(view)) view <- "overlap"
+        min_lfc <- input[[min_lfc_pfx]]; if (is.na(min_lfc)) min_lfc <- NULL
+        max_lfc <- input[[max_lfc_pfx]]; if (is.na(max_lfc)) max_lfc <- NULL
         con     <- con_r()
         order_col <- if (view == "ngenes") "n_overlap" else "pct"
-        compute_deg_overlap(con, assay, ref_tbl, dir, topn, maxsize, order_col)
+        compute_deg_overlap(con, assay, ref_tbl, dir, topn, maxsize, order_col,
+                            min_lfc = min_lfc, max_lfc = max_lfc)
       })
     }
 
-    data_ro   <- .make_overlap_data("reactome",      "ro_dir", "ro_topn", "ro_maxsize", "ro_view")
-    data_gobp <- .make_overlap_data("go_bp",         "gobp_dir", "gobp_topn", "gobp_maxsize", "gobp_view")
-    data_gomf <- .make_overlap_data("go_mf",         "gomf_dir", "gomf_topn", "gomf_maxsize", "gomf_view")
-    data_pc   <- .make_overlap_data("panther_class", "pc_dir", "pc_topn", "pc_maxsize", "pc_view")
+    data_ro   <- .make_overlap_data("reactome",      "ro_dir",   "ro_topn",   "ro_maxsize",   "ro_view",   "ro_min_lfc",   "ro_max_lfc")
+    data_gobp <- .make_overlap_data("go_bp",         "gobp_dir", "gobp_topn", "gobp_maxsize", "gobp_view", "gobp_min_lfc", "gobp_max_lfc")
+    data_gomf <- .make_overlap_data("go_mf",         "gomf_dir", "gomf_topn", "gomf_maxsize", "gomf_view", "gomf_min_lfc", "gomf_max_lfc")
+    data_pc   <- .make_overlap_data("panther_class", "pc_dir",   "pc_topn",   "pc_maxsize",   "pc_view",   "pc_min_lfc",   "pc_max_lfc")
 
     # Bar chart renderer (shared across all DEG overlap tabs)
     .render_overlap_bar <- function(data_r, dir_pfx, src_label, view_pfx) {
       renderPlotly({
-        df  <- data_r(); req(df, nrow(df) > 0)
+        df <- data_r()
+        validate(need(!is.null(df) && nrow(df) > 0,
+                      "No annotations found for the current filters. Try adjusting the log2FC range, direction, or max category size."))
         dir <- input[[dir_pfx]]; if (is.null(dir)) dir <- "all"
         view_mode <- input[[view_pfx]]; if (is.null(view_mode)) view_mode <- "overlap"
         dir_clr <- switch(dir,
@@ -692,7 +881,9 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     # Table renderer (shared; allow_select enables row-click gene chips)
     .render_overlap_tbl <- function(data_r, allow_select = FALSE, view_pfx = NULL) {
       DT::renderDT({
-        df <- data_r(); req(df, nrow(df) > 0)
+        df <- data_r()
+        validate(need(!is.null(df) && nrow(df) > 0,
+                      "No annotations found for the current filters. Try adjusting the log2FC range, direction, or max category size."))
         view_mode <- if (!is.null(view_pfx)) input[[view_pfx]] else "overlap"
         if (is.null(view_mode)) view_mode <- "overlap"
 
@@ -931,7 +1122,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       if (length(idx) == 1 && !is.null(df) && idx <= nrow(df))
         sel_row_ro(df[idx, ]) else sel_row_ro(NULL)
     })
-    observeEvent(list(input$deg_assay, input$ro_dir, input$ro_topn, input$ro_maxsize, input$ro_view),
+    observeEvent(list(input$deg_assay, input$ro_dir, input$ro_topn, input$ro_maxsize, input$ro_view,
+                      input$ro_min_lfc, input$ro_max_lfc),
                  { sel_row_ro(NULL) }, ignoreInit = TRUE)
 
     ro_gene_info_r       <- .make_gene_info_r(sel_row_ro)
@@ -948,7 +1140,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       if (length(idx) == 1 && !is.null(df) && idx <= nrow(df))
         sel_row_gobp(df[idx, ]) else sel_row_gobp(NULL)
     })
-    observeEvent(list(input$deg_assay, input$gobp_dir, input$gobp_topn, input$gobp_maxsize, input$gobp_view),
+    observeEvent(list(input$deg_assay, input$gobp_dir, input$gobp_topn, input$gobp_maxsize, input$gobp_view,
+                      input$gobp_min_lfc, input$gobp_max_lfc),
                  { sel_row_gobp(NULL) }, ignoreInit = TRUE)
 
     gobp_gene_info_r       <- .make_gene_info_r(sel_row_gobp)
@@ -965,7 +1158,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       if (length(idx) == 1 && !is.null(df) && idx <= nrow(df))
         sel_row_gomf(df[idx, ]) else sel_row_gomf(NULL)
     })
-    observeEvent(list(input$deg_assay, input$gomf_dir, input$gomf_topn, input$gomf_maxsize, input$gomf_view),
+    observeEvent(list(input$deg_assay, input$gomf_dir, input$gomf_topn, input$gomf_maxsize, input$gomf_view,
+                      input$gomf_min_lfc, input$gomf_max_lfc),
                  { sel_row_gomf(NULL) }, ignoreInit = TRUE)
 
     gomf_gene_info_r       <- .make_gene_info_r(sel_row_gomf)
@@ -982,7 +1176,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       if (length(idx) == 1 && !is.null(df) && idx <= nrow(df))
         sel_row_pc(df[idx, ]) else sel_row_pc(NULL)
     })
-    observeEvent(list(input$deg_assay, input$pc_dir, input$pc_topn, input$pc_maxsize, input$pc_view),
+    observeEvent(list(input$deg_assay, input$pc_dir, input$pc_topn, input$pc_maxsize, input$pc_view,
+                      input$pc_min_lfc, input$pc_max_lfc),
                  { sel_row_pc(NULL) }, ignoreInit = TRUE)
 
     pc_gene_info_r       <- .make_gene_info_r(sel_row_pc)
@@ -1118,14 +1313,23 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     hpo_joined_r <- .make_joined_r(hpo_pheno_r, reactive("hpo"))
     di_joined_r  <- .make_joined_r(di_pheno_r,  reactive(input$di_ds))
 
-    .make_top_pheno_r <- function(joined_r, pheno_r, ds_r, topn_r, dir_r, maxsize_r) {
+    .make_top_pheno_r <- function(joined_r, pheno_r, ds_r, topn_r, dir_r, maxsize_r,
+                                    min_lfc_r = reactive(NULL), max_lfc_r = reactive(NULL)) {
       reactive({
         ds <- ds_r(); req(ds)
         if (ds == "panelapp") return(NULL)
         jd     <- joined_r(); req(!is.null(jd), nrow(jd) > 0)
         ph_col <- .PB_COL[[ds]]
         n_top  <- topn_r(); dir <- dir_r(); maxsize <- maxsize_r()
+        min_lfc <- min_lfc_r(); max_lfc <- max_lfc_r()
         if (dir != "all") { jd <- jd[jd$DEG == dir, ]; req(nrow(jd) > 0) }
+        if ("log2fc" %in% colnames(jd)) {
+          if (!is.null(min_lfc) && !is.na(min_lfc) && is.finite(min_lfc))
+            jd <- jd[!is.na(jd$log2fc) & jd$log2fc >= min_lfc, ]
+          if (!is.null(max_lfc) && !is.na(max_lfc) && is.finite(max_lfc))
+            jd <- jd[!is.na(jd$log2fc) & jd$log2fc <= max_lfc, ]
+          req(nrow(jd) > 0)
+        }
         # Compute category sizes from full reference and filter
         ph_raw <- pheno_r(); req(!is.null(ph_raw))
         cat_sizes <- ph_raw |>
@@ -1154,13 +1358,16 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
 
     ph_top_r  <- .make_top_pheno_r(ph_joined_r,  ph_pheno_r,  reactive("impc"),
                                     reactive(input$ph_topn),  reactive(input$ph_dir),
-                                    reactive(input$ph_maxsize))
+                                    reactive(input$ph_maxsize),
+                                    reactive(input$ph_min_lfc), reactive(input$ph_max_lfc))
     hpo_top_r <- .make_top_pheno_r(hpo_joined_r, hpo_pheno_r, reactive("hpo"),
                                     reactive(input$hpo_topn), reactive(input$hpo_dir),
-                                    reactive(input$hpo_maxsize))
+                                    reactive(input$hpo_maxsize),
+                                    reactive(input$hpo_min_lfc), reactive(input$hpo_max_lfc))
     di_top_r  <- .make_top_pheno_r(di_joined_r,  di_pheno_r,  reactive(input$di_ds),
                                     reactive(input$di_topn),  reactive(input$di_dir),
-                                    reactive(input$di_maxsize))
+                                    reactive(input$di_maxsize),
+                                    reactive(input$di_min_lfc), reactive(input$di_max_lfc))
 
     # ── Wide-data reactives (shared between DT render and gene chip) ──────────
 
@@ -1204,7 +1411,9 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     # Render DT from the shared wide reactive (renames columns for display only)
     .render_pheno_tbl <- function(wide_r, ds_r) {
       DT::renderDT({
-        wide <- wide_r(); req(!is.null(wide), nrow(wide) > 0)
+        wide <- wide_r()
+        validate(need(!is.null(wide) && nrow(wide) > 0,
+                      "No annotations found for the current filters. Try adjusting the log2FC range, direction, or max category size."))
         ds   <- ds_r()
         ph_col <- .PB_COL[[ds]]; ph_lbl <- .PB_LABEL[[ds]]
         display <- as.data.frame(wide)
@@ -1324,7 +1533,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
         sel_row_ph(NULL)
       }
     })
-    observeEvent(list(input$deg_assay, input$ph_dir, input$ph_topn, input$ph_zyg, input$ph_maxsize),
+    observeEvent(list(input$deg_assay, input$ph_dir, input$ph_topn, input$ph_zyg, input$ph_maxsize,
+                      input$ph_min_lfc, input$ph_max_lfc),
                  { sel_row_ph(NULL) }, ignoreInit = TRUE)
 
     ph_gene_info_r       <- .make_gene_info_r(sel_row_ph)
@@ -1346,7 +1556,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
         sel_row_hpo(NULL)
       }
     })
-    observeEvent(list(input$deg_assay, input$hpo_dir, input$hpo_topn, input$hpo_maxsize),
+    observeEvent(list(input$deg_assay, input$hpo_dir, input$hpo_topn, input$hpo_maxsize,
+                      input$hpo_min_lfc, input$hpo_max_lfc),
                  { sel_row_hpo(NULL) }, ignoreInit = TRUE)
 
     hpo_gene_info_r       <- .make_gene_info_r(sel_row_hpo)
@@ -1368,7 +1579,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
         sel_row_di(NULL)
       }
     })
-    observeEvent(list(input$deg_assay, input$di_ds, input$di_dir, input$di_topn, input$di_maxsize),
+    observeEvent(list(input$deg_assay, input$di_ds, input$di_dir, input$di_topn, input$di_maxsize,
+                      input$di_min_lfc, input$di_max_lfc),
                  { sel_row_di(NULL) }, ignoreInit = TRUE)
 
     di_gene_info_r       <- .make_gene_info_r(sel_row_di)
@@ -1378,7 +1590,9 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
 
     .render_top_pheno <- function(top_r, ds_r, dir_r) {
       renderPlotly({
-        td <- top_r(); req(!is.null(td))
+        td <- top_r()
+        validate(need(!is.null(td),
+                      "No annotations found for the current filters. Try adjusting the log2FC range, direction, or max category size."))
         ds     <- ds_r()
         summ   <- td$summ; labels <- td$top_labels; ph_col <- td$ph_col
         dir    <- dir_r(); if (is.null(dir)) dir <- "all"
@@ -1449,6 +1663,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
         updateSliderInput(session, paste0(pfx, "_topn"), value = 5)
         updateRadioButtons(session, paste0(pfx, "_view"), selected = "overlap")
         updateSliderInput(session, paste0(pfx, "_maxsize"), value = 500)
+        updateNumericInput(session, paste0(pfx, "_min_lfc"), value = NA)
+        updateNumericInput(session, paste0(pfx, "_max_lfc"), value = NA)
       })
     })
 
@@ -1459,6 +1675,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       updateCheckboxGroupInput(session, "ph_zyg",
                                selected = c("homozygote", "heterozygote"))
       updateSliderInput(session, "ph_maxsize", value = 500)
+      updateNumericInput(session, "ph_min_lfc", value = NA)
+      updateNumericInput(session, "ph_max_lfc", value = NA)
     })
 
     # HPO
@@ -1466,6 +1684,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       updateRadioButtons(session, "hpo_dir", selected = "all")
       updateSliderInput(session, "hpo_topn", value = 5)
       updateSliderInput(session, "hpo_maxsize", value = 500)
+      updateNumericInput(session, "hpo_min_lfc", value = NA)
+      updateNumericInput(session, "hpo_max_lfc", value = NA)
     })
 
     # Disease (OMIM / Orphanet)
@@ -1474,6 +1694,8 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
       updateSliderInput(session, "di_topn", value = 5)
       updateRadioButtons(session, "di_ds", selected = "omim")
       updateSliderInput(session, "di_maxsize", value = 500)
+      updateNumericInput(session, "di_min_lfc", value = NA)
+      updateNumericInput(session, "di_max_lfc", value = NA)
     })
 
     # =========================================================================
@@ -1482,6 +1704,7 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
 
     invisible(lapply(
       c("deg_no_assays", "deg_match_count", "deg_filter_badge", "deg_meta_above",
+        "deg_modal_n_up", "deg_modal_n_down", "deg_modal_up", "deg_modal_down",
         "gs_ro", "gs_gobp", "gs_gomf", "gs_pc", "gs_ph", "gs_hpo", "gs_di",
         "ro_bar", "ro_tbl", "ro_gene_panel",
         "gobp_bar", "gobp_tbl", "gobp_gene_panel",

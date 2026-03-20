@@ -160,16 +160,21 @@ homeServer <- function(id, parent_session, con_r, study_info_r) {
       si <- study_info_r()
       n_studies <- length(unique(na.omit(si$Study_title)))
       n_assays  <- length(unique(si$Assay))
+      n_genes   <- length(unique(na.omit(si$Gene)))
+      n_models  <- length(unique(na.omit(si$Model_system)))
+      n_comps   <- length(unique(na.omit(si$Comparison)))
+      chip <- function(n, label, bg) {
+        tags$span(class = "badge rounded-pill",
+                  style = sprintf("background:%s; font-size:0.85rem; font-weight:500; padding:6px 14px;", bg),
+                  paste(n, label))
+      }
       div(
-        class = "d-flex justify-content-center gap-2 mt-2",
-        tags$span(
-          class = "badge rounded-pill",
-          style = "background:#4E79A7; font-size:0.85rem; font-weight:500; padding:6px 14px;",
-          paste(n_studies, "studies")),
-        tags$span(
-          class = "badge rounded-pill",
-          style = "background:#59A14F; font-size:0.85rem; font-weight:500; padding:6px 14px;",
-          paste(n_assays, "assays"))
+        class = "d-flex justify-content-center gap-2 mt-2 flex-wrap",
+        chip(n_genes,   "genes",       "#E15759"),
+        chip(n_studies, "studies",     "#4E79A7"),
+        chip(n_assays,  "assays",      "#59A14F"),
+        chip(n_models,  "model systems", "#F28E2B"),
+        chip(n_comps,   "comparisons", "#76B7B2")
       )
     })
 
