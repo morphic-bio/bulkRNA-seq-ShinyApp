@@ -132,8 +132,8 @@ unlink(TMP_DB)
 # =============================================================================
 cat("── Step 3: Add study_info ──\n")
 
-study_info <- openxlsx::read.xlsx("./bulkRNA-seq/bulk-study-info2.xlsx")
-names(study_info)[names(study_info) == "ASCL2"] <- "Gene"
+study_info <- openxlsx::read.xlsx("./bulkRNA-seq/bulk-study-info3.xlsx")
+# names(study_info)[names(study_info) == "ASCL2"] <- "Gene"
 
 con <- dbConnect(duckdb(), BUILD_DB)
 dbWriteTable(con, "study_info", study_info, overwrite = TRUE)
