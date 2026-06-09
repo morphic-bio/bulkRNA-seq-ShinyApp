@@ -535,6 +535,9 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     # Shared: assay filter + picker
     # =========================================================================
 
+    # Human-readable labels for the assay picker (names = Assay, value = label)
+    assay_labels <- reactive(build_assay_labels(study_info_r()))
+
     observe({
       si <- study_info_r()
       updateSelectInput(session, "deg_filter_gene",
@@ -561,13 +564,12 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
     })
 
     observeEvent(filtered_deg_assays(), {
-      ch   <- filtered_deg_assays()
       cur  <- isolate(input$deg_assay)
+      keep <- !is.null(cur) && nzchar(cur)
       # Keep currently selected assay even if it doesn't match filters
-      all_choices <- if (!is.null(cur) && nzchar(cur)) sort(unique(c(cur, ch))) else ch
-      kept <- if (!is.null(cur) && nzchar(cur)) cur else ""
+      choices <- .assay_choices(c(if (keep) cur, filtered_deg_assays()), assay_labels())
       updateSelectizeInput(session, "deg_assay",
-                           choices = all_choices, selected = kept, server = TRUE)
+                           choices = choices, selected = if (keep) cur else "", server = TRUE)
     })
 
     output$deg_no_assays <- renderUI({
@@ -609,9 +611,9 @@ deg_annotationsServer <- function(id, con_r, study_info_r) {
 
     # ── Clear assay selection ──────────────────────────────────────────────────
     observeEvent(input$deg_clear_assay, {
-      ch <- filtered_deg_assays()
+      choices <- .assay_choices(filtered_deg_assays(), assay_labels())
       updateSelectizeInput(session, "deg_assay",
-                           choices = ch, selected = "", server = TRUE)
+                           choices = choices, selected = "", server = TRUE)
     })
 
     # ── Assay metadata card ──────────────────────────────────────────────────

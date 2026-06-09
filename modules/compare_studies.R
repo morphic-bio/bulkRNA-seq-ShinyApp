@@ -118,6 +118,9 @@ compare_studiesUI <- function(id) {
 compare_studiesServer <- function(id, con_r, study_info_r) {
   moduleServer(id, function(input, output, session) {
 
+    # Human-readable labels for the assay picker (names = Assay, value = label)
+    assay_labels <- reactive(build_assay_labels(study_info_r()))
+
     # ── Populate filter choices ───────────────────────────────────────────────
     observe({
       si <- study_info_r()
@@ -146,12 +149,11 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
     })
 
     observeEvent(filtered_cmp_assays(), {
-      ch       <- filtered_cmp_assays()
       selected <- isolate(input$cmp_assays)
       # Keep currently selected assays even if they don't match filters
-      all_choices <- sort(unique(c(selected, ch)))
+      choices  <- .assay_choices(c(selected, filtered_cmp_assays()), assay_labels())
       updateSelectizeInput(session, "cmp_assays",
-                           choices = all_choices, selected = selected, server = TRUE)
+                           choices = choices, selected = selected, server = TRUE)
     })
 
     output$cmp_no_assays <- renderUI({
@@ -193,9 +195,9 @@ compare_studiesServer <- function(id, con_r, study_info_r) {
 
     # ── Clear assay selection ──────────────────────────────────────────────────
     observeEvent(input$cmp_clear_assays, {
-      ch <- filtered_cmp_assays()
+      choices <- .assay_choices(filtered_cmp_assays(), assay_labels())
       updateSelectizeInput(session, "cmp_assays",
-                           choices = ch, selected = character(0), server = TRUE)
+                           choices = choices, selected = character(0), server = TRUE)
     })
 
     # ── Clear DEG filters (direction + LFC) ──────────────────────────────────

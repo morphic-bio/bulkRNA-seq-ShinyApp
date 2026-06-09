@@ -217,6 +217,81 @@ load_deg_genes <- function(con, assay_names) {
   do.call(rbind, rows)
 }
 
+# ── Human-readable assay picker labels ──────────────────────────────────────
+
+#' Build readable labels for the assay pickers.
+#' Base format: "GENE - COMPARISON - MODEL SYSTEM - TIMEPOINT" (empty fields
+#' dropped). A parenthetical disambiguator is appended ONLY when a base label is
+#' shared by more than one assay — using the oxygen condition (hypoxia/normoxia),
+#' the OE genetic background, and/or the source study/release, whichever is needed
+#' to make every label unique.
+#' @param si study_info data.frame
+#' @return named character vector: names = Assay (table name), values = label
+build_assay_labels <- function(si) {
+  si <- si[!duplicated(si$Assay), ]
+  n  <- nrow(si)
+  cl <- function(x) trimws(ifelse(is.na(x), "", as.character(x)))
+  g  <- cl(si$Gene); cmp <- cl(si$Comparison)
+  ms <- cl(si$Model_system); tp <- cl(si$Differentation_time_point)
+
+  base <- vapply(seq_len(n), function(i) {
+    parts <- c(g[i], cmp[i], ms[i], tp[i]); parts <- parts[nzchar(parts)]
+    paste(parts, collapse = " - ")
+  }, character(1))
+
+  # condition tag: OE genetic background, else oxygen (hypoxia / normoxia)
+  cond <- rep(NA_character_, n)
+  cd   <- si$Condition_details
+  has_bg <- !is.na(cd) & grepl("Genetic background", cd)
+  bg <- sub("\\.\\s*$", "", sub("^.*Genetic background:\\s*", "", cd))
+  bg <- sub("\\s*\\(parental\\)", "", bg)
+  cond[has_bg] <- paste0("bg: ", bg[has_bg])
+  co <- si$Condition
+  hh <- !is.na(co) & grepl("hypox",  co, ignore.case = TRUE)
+  nn <- !is.na(co) & grepl("normox", co, ignore.case = TRUE)
+  cond[is.na(cond) & hh & !nn] <- "hypoxia"
+  cond[is.na(cond) & nn & !hh] <- "normoxia"
+
+  # study tag: assay-name prefix up to the model-system short code
+  short <- cl(si$Hutch_model_system_short)
+  pref  <- sub("^T", "", si$Assay)
+  pref  <- vapply(seq_len(n), function(i) {
+    if (nzchar(short[i])) sub(paste0("_", short[i], "_.*$"), "", pref[i]) else pref[i]
+  }, character(1))
+  study <- gsub("_", " ", pref)
+  study <- sub("^(\\d{4}) (\\d{2}) ", "\\1-\\2 ", study)   # "2024 06 JAX.." -> "2024-06 JAX.."
+
+  final <- base
+  for (b in unique(base[duplicated(base)])) {
+    idx <- which(base == b)
+    ct  <- cond[idx]; st <- study[idx]
+    if (all(!is.na(ct)) && !any(duplicated(ct))) {
+      suffix <- ct                                  # oxygen / background alone
+    } else if (!any(duplicated(st))) {
+      suffix <- st                                  # source study alone
+    } else {
+      combo  <- paste(st, ifelse(is.na(ct), "", ct))
+      suffix <- if (!any(duplicated(combo)))        # study + condition
+                  ifelse(is.na(ct), st, paste0(st, ", ", ct)) else si$Assay[idx]
+    }
+    final[idx] <- paste0(b, " (", suffix, ")")
+  }
+  setNames(final, si$Assay)
+}
+
+#' Assemble selectize choices (named vector: names = label, values = Assay),
+#' sorted by label, from a set of assay table names + a label map.
+#' @param assays character vector of Assay table names
+#' @param labmap named vector from build_assay_labels() (names = Assay)
+.assay_choices <- function(assays, labmap) {
+  assays <- unique(assays[nzchar(assays)])
+  if (length(assays) == 0) return(setNames(character(0), character(0)))
+  labs <- unname(labmap[assays])
+  labs[is.na(labs)] <- assays[is.na(labs)]          # fallback to raw name
+  o <- order(labs)
+  setNames(assays[o], labs[o])
+}
+
 # ── On-the-fly overlap computation ──────────────────────────────────────────
 
 #' Compute DEG overlap with a reference gene-set table.
