@@ -2,6 +2,8 @@
 
 A Shiny application for browsing, comparing, and analysing differential gene expression across MorPhiC knock-out assays.
 
+**🔗 Live app:** https://whri-phenogenomics.shinyapps.io/morphic-rnaseq/
+
 ## Pages
 
 | Page | Description |
